@@ -42,6 +42,9 @@ void send_udp_msg(otInstance *aInst, const char *msg, otIp6Address destAddr)
     otError error;
     otMessageInfo msgInfo;
     otMessage *udpMsg = otUdpNewMessage(aInst, NULL);
+    
+    otUdpSocket udpSock;
+    otSockAddr sockAddr = {.mPort = 1234}; // to-do: make this publicly accessible or perhaps make a configuration file
 
     // find errors, and if not, send
     error = otMessageAppend(udpMsg, msg, strlen(msg));
@@ -51,7 +54,7 @@ void send_udp_msg(otInstance *aInst, const char *msg, otIp6Address destAddr)
         msgInfo.mPeerAddr = destAddr;
         msgInfo.mPeerPort = 1234; // put some BS info ig
 
-        error = otUdpSend(aInst, udpMsg, &msgInfo);
+        error = otUdpSend(aInst, &udpSock, udpMsg, &msgInfo);
     }
 
     // error handling...?
