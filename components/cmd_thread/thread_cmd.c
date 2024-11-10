@@ -12,16 +12,65 @@
  * Thanks again, dj1ch
  */
 
+#include <stdio.h>
+
+#include "esp_system.h"
+#include "esp_mac.h"
+
 #include "openthread/instance.h"
 #include "openthread/thread.h"
 #include "openthread/message.h"
 #include "openthread/udp.h"
 
+static struct {
+    struct arg_char *command;
+    struct arg_end *end;
+} thread_net_args;
+
+/**
+ * Generate a random ID to use when communicating 
+ * with another client
+ */
+static void random_ipv6_addr(otInstance *aInst)
+{
+    // create an instance of the address
+    otNetifAddress addr;
+    memset(&addr, 0, sizeof(addr));
+
+
+    // set as a local address
+    addr.mAddress.mFields.m8[0] = 0xfd;
+
+    // generate first 5 random bytes
+    for (int i = 1; i < 6; i++) 
+    {
+        addr.mAddress.mFields.m8[i] = esp_random() & 0xff;
+    }
+
+    // fill up the remaining fields with randomness
+    for (int i = 6; i < 16; i++) 
+    {
+        addr.mAddress.mFields.m8[i] = esp_random() & 0xff;
+    }
+
+    // set prefix length
+    addr.mPrefixLength = 48;
+    addr.mPreferred = true;
+    addr.mValid = true;
+    
+    // add to thread
+    otIp6AddUnicastAddress(aInst, &addr);
+
+    char addrStr[40];
+    otIp6AddressToString(&addr.mAddress, addrStr, sizeof(addrStr));
+    printf("Generated IPv6 Address: %s\n", addrStr);
+}
+
 /**
  * Setup UDP for communication
  * and recieve messages in a callback
  */
-void udp_rcv_cb(void *aCntxt, otMessage *aMsg, const otMessageInfo *aMsgInfo)
+static void udp_rcv_cb(void *aCntxt, otMessage *aMsg, const otMessageInfo *aMsgInfo)
 {
     char msg[128]; // to-do: allow configurable message size
 
@@ -36,7 +85,7 @@ void udp_rcv_cb(void *aCntxt, otMessage *aMsg, const otMessageInfo *aMsgInfo)
 /**
  * Send a message!
  */
-void send_udp_msg(otInstance *aInst, const char *msg, otIp6Address destAddr)
+static void send_udp_msg(otInstance *aInst, const char *msg, otIp6Address destAddr)
 {
     // create message + info
     otError error;
@@ -67,13 +116,14 @@ void send_udp_msg(otInstance *aInst, const char *msg, otIp6Address destAddr)
 /**
  * Creates an instance of thread and joins the network
  */
-void register_thread_net(void)
+static void register_thread_net(void)
 {
     otInstance *inst = otInstanceInitSingle();
 
     // start interface
     otIp6SetEnabled(inst, true);
     otThreadSetEnabled(inst, true);
+    random_ipv6_addr(inst);
 
     // init UDP for messaging system
     otUdpSocket udpSock;

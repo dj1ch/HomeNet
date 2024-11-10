@@ -35,11 +35,6 @@ static void register_cca(void);
 static void register_esp154(void);
 static void register_reg(void);
 
-/**
- * HomeNet related functions
- */
-static void register_net(void);
-
 void register_ieee802154_cmd(void)
 {
     register_rx();
@@ -56,7 +51,6 @@ void register_ieee802154_cmd(void)
     register_cca();
     register_esp154();
     register_reg();
-    register_net();
 }
 
 static struct {
@@ -809,11 +803,6 @@ static void register_rx(void)
         .argtable = &rx_args
     };
     ESP_ERROR_CHECK(esp_console_cmd_register(&cmd));
-}
-
-static void register_net(void) 
-{
-
 }
 
 static void esp_ieee802154_frame_print(const uint8_t *frame)
