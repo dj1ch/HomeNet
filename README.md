@@ -15,7 +15,8 @@ In simpler words, Thread is a resilient network designed to handle potentially h
 ## Project Roadmap
 
 * [ ] Create basic messaging w/ commands
-* [ ] Allow the saving of clients like phone contacts
+* [ ] Create custom method for anyone to advertise their presence to other instances of HomeNet
+* [x] Allow the saving of clients like phone contacts
 * [ ] Allow communication with these saved clients like DMs
 * [ ] Establish a method to ensure the security of the connection
 * [ ] (Maybe) Make an application that communicates with the ESP over BLE to send messages
