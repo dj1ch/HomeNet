@@ -1,0 +1,16 @@
+dependencies:
+  cmd_system:
+    dependencies: []
+    source:
+      path: /home/dj1ch/esp/esp-idf/examples/system/console/advanced/components/cmd_system
+      type: local
+    version: '*'
+  idf:
+    source:
+      type: idf
+    version: 5.5.0
+direct_dependencies:
+- cmd_system
+manifest_hash: ef6c43c420498c2472a4719d380c6c19aad05459365e6cf22b16fc738d800113
+target: esp32c6
+version: 2.0.0
