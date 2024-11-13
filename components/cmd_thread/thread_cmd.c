@@ -20,6 +20,8 @@
 #include "esp_system.h"
 #include "esp_mac.h"
 
+#include <freertos/FreeRTOS.h>
+
 #include "openthread/instance.h"
 #include "openthread/thread.h"
 #include "openthread/message.h"
@@ -34,6 +36,18 @@
 
 #define ADVERT_MSG_FORMAT "Thread device available, Magic Number: "
 
+#define TIMEOUT_MS 10000
+#define VERIF_PORT 603
+
+#define MAX_PEERS 10
+
+typedef struct {
+    otIp6Address peerAddr;
+    int expected;
+    bool active;     
+} peer_verif_session;
+
+static peer_verif_session peerSessions[MAX_PEERS] = {0};
 static struct {
     struct arg_char *command;
     struct arg_end *end;
@@ -104,12 +118,12 @@ static void random_ipv6_addr(otInstance *aInst)
  * Setup UDP for communication
  * and recieve messages in a callback
  */
-static void udp_rcv_cb(void *aCntxt, otMessage *aMsg, const otMessageInfo *aMsgInfo)
+static void udp_advert_rcv_cb(otInstance *aInst, otMessage *aMsg, const otMessageInfo *aMsgInfo)
 {
     char buf[MSG_SIZE];
     uint16_t len;
 
-    len = otMessageGetLength(aMessage);
+    len = otMessageGetLength(aMsg);
     if (len > MAX_MSG_LEN)
     {
         printf("Message too long!\n");
@@ -117,7 +131,7 @@ static void udp_rcv_cb(void *aCntxt, otMessage *aMsg, const otMessageInfo *aMsgI
     }
 
     // copy into buffer
-    otMessageRead(aMessage, 0, buf, len);
+    otMessageRead(aMsg, 0, buf, len);
     buf[len] = '\0';
 
     // check if it matches the adertisement format
@@ -132,7 +146,7 @@ static void udp_rcv_cb(void *aCntxt, otMessage *aMsg, const otMessageInfo *aMsgI
                 printf("Received advertisement from a valid peer with magic number: %u\n", magicNumber);
                 
                 // to-do: handle this peer interaction
-
+                start_verif_process(aInst, aMsgInfo);
             }
             else
             {
@@ -184,7 +198,7 @@ static void send_udp_msg(otInstance *aInst, const char *msg, otIp6Address destAd
 /**
  * Sends advertisement for clients to find
  */
-static void send_thread_advertisement(otInstance *aInstance)
+static void send_thread_advertisement(otInstance *aInst)
 {
     otMessage *msg;
     otMessageInfo msgInfo;
@@ -194,8 +208,8 @@ static void send_thread_advertisement(otInstance *aInstance)
     snprintf(advertMsg, ADVERT_SIZE, "Thread device available, Magic Number: %u", MAGIC_NUM);
     memset(&msgInfo, 0, sizeof(msgInfo));
     
-    msgInfo.mPeerAddr = *otThreadGetMeshLocalEid(aInstance);
-    msg = otUdpNewMessage(aInstance, NULL);
+    msgInfo.mPeerAddr = *otThreadGetMeshLocalEid(aInst);
+    msg = otUdpNewMessage(aInst, NULL);
 
     // another check to make sure this works
     if (msg == NULL)
@@ -206,7 +220,7 @@ static void send_thread_advertisement(otInstance *aInstance)
 
     // append advert and send it!
     otMessageAppend(msg, advertMsg, strlen(advertMsg));
-    otUdpSend(aInstance, msg, &msgInfo);
+    otUdpSend(aInst, msg, &msgInfo);
 
     printf("Advertisement sent: %s\n", advertMsg);
 }
@@ -214,13 +228,13 @@ static void send_thread_advertisement(otInstance *aInstance)
 /**
  * Scan for peers
  */
-static void start_peer_scan(otInstance *aInstance)
+static void start_peer_scan(otInstance *aInst)
 {
     otUdpSocket udpSocket;
     otError error;
 
     // create UDP socket
-    error = otUdpOpen(aInstance, &udpSocket, udp_receive_callback, NULL);
+    error = otUdpOpen(aInst, &udpSocket, udp_receive_callback, NULL);
     if (error != OT_ERROR_NONE)
     {
         printf("Failed to open UDP socket!\n");
@@ -228,7 +242,7 @@ static void start_peer_scan(otInstance *aInstance)
     }
 
     // bind socket to port
-    error = otUdpBind(aInstance, &udpSocket, UDP_SOCK);
+    error = otUdpBind(aInst, &udpSocket, UDP_SOCK);
     if (error != OT_ERROR_NONE)
     {
         printf("Failed to bind UDP socket!\n");
@@ -236,6 +250,97 @@ static void start_peer_scan(otInstance *aInstance)
     }
 
     printf("Listening for peer advertisements on port %u\n", UDP_SOCK);
+}
+
+/**
+ * Peer interaction starts as folows:
+ * 1. Device A sends advertisements
+ * 2. Device B requests a verification code from device A
+ * 3. Device A 'generates' a code then sends it back to device B
+ * 4. Device B increments the code then resends it back to device A to complete the handshake
+ * 
+ * From here we can confirm peer legitimacy, then start communication.
+ * Potential to do: Implement a secure HMAC verification system as well.
+ */
+
+/**
+ * Starts a peer interaction by exchanging a verification code,
+ * which requires physical access to both devices.
+ */
+static void start_verif_process(otInstance *aInst, otMesssageInfo *aMsgInfo)
+{
+    // first get a code
+    int code = generate_verif_code();
+    int expected = code + 1;
+
+    // send it
+    char msg[MSG_SIZE];
+    snprintf(msg, MSG_SIZE, "Verification Code: %d", code);
+
+    otMessage *oMsg = otUdpNewMessage(aInst, NULL);
+    if (oMsg == NULL) {
+        printf("Failed to allocate message!\n");
+        return;
+    }
+    otMessageAppend(oMsg, msg, strlen(msg));
+
+    // set important packet info
+    otMessageInfo respInfo = *aMsgInfo;
+    responseInfo.mPeerPort = VERIF_PORT;
+
+    // send it!
+    otUdpSend(aInst, oMsg, &respInfo);
+
+    printf("Sent verification code to peer: %d\n", code);
+
+    for (int i = 0; i < MAX_PEERS; i++) {
+        if (!peerSessions[i].active) {
+            peerSessions[i].peerAddr = aMsgInfo->mPeerAddr;
+            peerSessions[i].expected = expected;
+            peerSessions[i].active = true;
+            printf("Started verification session for peer!\n");
+            break;
+        }
+    }
+
+    // wait
+    vTaskDelay(pdMSTOTICKS(TIMEOUT_MS));
+}
+
+/**
+ * Finish last steps of verification
+ */
+static void rcv_verif_code(otMessage *aMsg, otMesssageInfo *aMsgInfo)
+{
+    char buf[MSG_SIZE];
+    int receivedCode;
+
+    // parse the message code
+    uint16_t len = otMessageGetLength(aMsg);
+    if (len >= MSG_SIZE) {
+        printf("Received message too long!\n");
+        return;
+    }
+    otMessageRead(aMsg, 0, buf, len);
+    buf[len] = '\0';
+
+    // check if received code is valid
+    if (sscanf(buf, "Verification Code: %d", &receivedCode) == 1) {
+        for (int i = 0; i < MAX_PEERS; i++) {
+            if (peerSessions[i].active && otIp6IsAddressEqual(&peerSessions[i].peerAddr, &aMsgInfo->mPeerAddr)) {
+                if (receivedCode == peerSessions[i].expected) {
+                    printf("Peer successfully verified with code: %d\n", receivedCode);
+                    peerSessions[i].active = false;
+                } else {
+                    printf("Invalid verification response code: %d\n", receivedCode);
+                }
+                return;
+            }
+        }
+        printf("Verification session not found for this peer!\n");
+    } else {
+        printf("Failed to parse verification response!\n");
+    }
 }
 
 /**
