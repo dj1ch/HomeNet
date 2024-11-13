@@ -49,35 +49,13 @@ static int random(int min, int max) { return min + esp_random() % (max - min + 1
 static int generate_verif_code(void)
 {
     int randSize = random(5,10);
-    int code[randSize] = {0, randSize};
     int verifCode = 0;
-    bool success = false;
 
-    // put as an array for the sake of multiple checks
-    for (int i = 0; i < randSize; i++) 
+    // improved verification code generator
+    for (int i = 0; i < randSize; i++)
     {
-        code[i] = random(1,9);
-    }
-
-    // check beforehand
-    if ((code[0] == 0) && (code[1] == randSize)) 
-    {
-        success = false;
-    } else {
-        success = true;
-        code = {};
-    }
-
-    // append to an int then return if it works fine...
-    if (success)
-    {
-        for (int j = 0; j < randSize; j++)
-        {
-            verifCode += code[j];
-        }
-    } else {
-        printf("Failed to generate verification code. Please try again.\n");
-        return;
+        int digit = random(1,9);
+        verifCode = verifCode * 10 + digit;
     }
 
     return verifCode;
@@ -142,18 +120,19 @@ static void udp_rcv_cb(void *aCntxt, otMessage *aMsg, const otMessageInfo *aMsgI
     otMessageRead(aMessage, 0, buf, len);
     buf[len] = '\0';
 
-    // Check if the message contains the expected advertisement format
+    // check if it matches the adertisement format
     if (strncmp(buf, ADVERT_MSG_FORMAT, strlen(ADVERT_MSG_FORMAT)) == 0)
     {
         uint32_t magicNumber;
         if (sscanf(buf + strlen(ADVERT_MSG_FORMAT), "%u", &magicNumber) == 1)
         {
-            // Check if the magic number matches the expected one for your project
+            // check for magic number
             if (magicNumber == MAGIC_NUM)
             {
                 printf("Received advertisement from a valid peer with magic number: %u\n", magicNumber);
                 
                 // to-do: handle this peer interaction
+
             }
             else
             {
