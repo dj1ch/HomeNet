@@ -261,6 +261,7 @@ static void start_peer_scan(otInstance *aInst)
  * 
  * From here we can confirm peer legitimacy, then start communication.
  * Potential to do: Implement a secure HMAC verification system as well.
+ * 
  */
 
 /**
