@@ -15,6 +15,8 @@
  * Thanks again, dj1ch
  */
 
+#include "thead_cmd.h"
+
 #include <stdio.h>
 
 #include "esp_system.h"
@@ -26,6 +28,12 @@
 #include "openthread/thread.h"
 #include "openthread/message.h"
 #include "openthread/udp.h"
+
+#include "esp_console.h"
+#include "argtable3/argtable3.h"
+#include "esp_log.h"
+
+#include <openthread/instance.h>
 
 // aww
 #define MAGIC_NUM 0x48616E616B6F
@@ -53,7 +61,31 @@ static struct {
     struct arg_end *end;
 } thread_net_args;
 
+/**
+ * OpenThread instance for singleton pattern
+ */
+static otInstance *otInstancePtr = NULL;
+
 static int random(int min, int max) { return min + esp_random() % (max - min + 1); }
+
+/**
+ * Finds the instance of OpenThread
+ * within the code and returns it.
+ */
+static otInstance *get_ot_instance() {
+    if (otInstancePtr == NULL) {
+        // init only once!
+        otInstancePtr = otInstanceInitSingle();
+        if (otInstancePtr == NULL) {
+            printf("Failed to initialize OpenThread instance\n");
+            return NULL;
+        }
+        printf("OpenThread instance initialized\n");
+    } else {
+        printf("OpenThread instance already initialized\n");
+    }
+    return otInstancePtr;
+}
 
 /**
  * Generate a random verification code, 
@@ -300,6 +332,13 @@ static void start_verif_process(otInstance *aInst, otMesssageInfo *aMsgInfo)
             peerSessions[i].expected = expected;
             peerSessions[i].active = true;
             printf("Started verification session for peer!\n");
+
+            // store peer addr in NVS
+            esp_err_t err = nvs_set_blob(nvs_handle, "deviceB_addr", &peerSessions[i].peerAddr, sizeof(peerSessions[i].peerAddr));
+            if (err != ESP_OK) {
+                printf("Failed to store peer address in NVS\n");
+            }
+
             break;
         }
     }
@@ -307,6 +346,76 @@ static void start_verif_process(otInstance *aInst, otMesssageInfo *aMsgInfo)
     // wait
     vTaskDelay(pdMSTOTICKS(TIMEOUT_MS));
 }
+
+/**
+ * Command which sends out the HomeNet advertisements
+ */
+static int send_advert_cmd(int argc, char **argv) {
+    otInstance *aInst = get_ot_instance();
+
+    send_thread_advertisement(aInst);
+
+    return ESP_OK;
+}
+
+/**
+ * Command which scans for a peer
+ */
+static int start_scan_cmd(int argc, char **argv) {
+    otInstance *aInst = get_ot_instance();
+
+    start_peer_scan(aInst);
+
+    return ESP_OK;
+}
+
+static int send_verification_cmd(int argc, char **argv) {
+    otInstance *aInst = get_ot_instance();
+
+    // handle peer addr
+    if (argc != 2) {
+        printf("Usage: send_verification <peer_address>\n");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    otIp6Address peerAddr;
+    if (parse_ipv6_address(argv[1], &peerAddr) != ESP_OK) {
+        printf("Invalid IPv6 address format\n");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // send the verification to the peer
+    start_verif_process(aInst, peerAddr);
+
+    return ESP_OK;
+}
+
+/**
+ * Register needed commands for HomeNet
+ */
+static void register_commands() {
+    const esp_console_cmd_t send_advert_cmd_struct = {
+        .command = "send_advert",
+        .help = "Send a thread advertisement",
+        .func = send_advert_cmd,
+    };
+    ESP_ERROR_CHECK(esp_console_cmd_register(&send_advert_cmd_struct));
+
+    const esp_console_cmd_t start_scan_cmd_struct = {
+        .command = "start_scan",
+        .help = "Start scanning for peers",
+        .func = start_scan_cmd,
+    };
+    ESP_ERROR_CHECK(esp_console_cmd_register(&start_scan_cmd_struct));
+
+    const esp_console_cmd_t send_verification_cmd_struct = {
+        .command = "send_verification",
+        .help = "Send verification code to peer",
+        .func = send_verification_cmd,
+    };
+    ESP_ERROR_CHECK(esp_console_cmd_register(&send_verification_cmd_struct));
+}
+
 
 /**
  * Finish last steps of verification
@@ -332,6 +441,12 @@ static void rcv_verif_code(otMessage *aMsg, otMesssageInfo *aMsgInfo)
                 if (receivedCode == peerSessions[i].expected) {
                     printf("Peer successfully verified with code: %d\n", receivedCode);
                     peerSessions[i].active = false;
+
+                    // save the peer by putting their address in NVS afterwards
+                    esp_err_t err = nvs_set_blob(nvs_handle, "deviceA_addr", &peerSessions[i].peerAddr, sizeof(peerSessions[i].peerAddr));
+                    if (err != ESP_OK) {
+                        printf("Failed to store peer address in NVS\n");
+                    }
                 } else {
                     printf("Invalid verification response code: %d\n", receivedCode);
                 }
