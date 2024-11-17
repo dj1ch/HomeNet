@@ -7,6 +7,8 @@
  * Most of the stuff here is miscallenous and are more QOL if anything.
  */
 
+#include "chat_cmd.h"
+
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -17,21 +19,6 @@
 
 // temporary for now
 bool clientDiscovered = false;
-
-/**
- * Initialize NVS to save client information
- */
-static esp_err_t init_nvs(void)
-{
-    esp_err_t err = nvs_flash_init();
-    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND)
-    {
-        // format NVS partition
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        err = nvs_flash_init();
-    }
-    return err;
-}
 
 /**
  * Get the status of the chat, such as connection
