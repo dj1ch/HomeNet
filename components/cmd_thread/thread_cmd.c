@@ -464,6 +464,7 @@ static void rcv_verif_code(otMessage *aMsg, otMesssageInfo *aMsgInfo)
  */
 static void register_thread_net(void)
 {
+    // create an instance
     otInstance *inst = otInstanceInitSingle();
 
     // start interface
@@ -476,4 +477,7 @@ static void register_thread_net(void)
     otSockAddr sockAddr = {.mPort = UDP_SOCK};
     otUdpOpen(inst, &udpSock, udp_rcv_cb, NULL);
     otUdpBind(inst, &udpSock, &sockAddr, OT_NETIF_THREAD);
+
+    // register commands for everything
+    register_commands();
 }
