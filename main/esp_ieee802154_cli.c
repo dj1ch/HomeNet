@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <string.h>
 #include "ieee802154_cmd.h"
+#include "chat_cmd.h"
+#include "thread_cmd.h"
 #include "esp_system.h"
 #include "esp_log.h"
 #include "esp_console.h"
@@ -46,6 +48,10 @@ void app_main(void)
     esp_console_register_help_command();
     register_ieee802154_cmd();
     register_system_common();
+
+    /* Register HomeNet */
+    register_thread_net();
+    register_chat();
 
     esp_console_dev_uart_config_t hw_config = ESP_CONSOLE_DEV_UART_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_console_new_repl_uart(&hw_config, &repl_config, &repl));
