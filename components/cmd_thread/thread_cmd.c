@@ -18,11 +18,14 @@
 #include "thead_cmd.h"
 
 #include <stdio.h>
+#include <string.h>
+#include <stdbool.h>
 
 #include "esp_system.h"
 #include "esp_mac.h"
 
 #include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 #include "openthread/instance.h"
 #include "openthread/thread.h"
@@ -65,6 +68,12 @@ static struct {
  * OpenThread instance for singleton pattern
  */
 static otInstance *otInstancePtr = NULL;
+
+// advertisement task handle
+static TaskHandle_t advertTaskHandle = NULL;
+
+// stop flag for advertisement
+static bool stopAdvertTask = false;
 
 static int random(int min, int max) { return min + esp_random() % (max - min + 1); }
 
@@ -348,20 +357,112 @@ static void start_verif_process(otInstance *aInst, otMesssageInfo *aMsgInfo)
 }
 
 /**
- * Command which sends out the HomeNet advertisements
+ * Runs the advertisement task
  */
-static int send_advert_cmd(int argc, char **argv) {
-    otInstance *aInst = get_ot_instance();
+void advert_task(void *argc)
+{
+    otInstance *aInst = (otInstance *)argc;
+    uint32_t iterations = *(uint32_t *)argc;
+    uint32_t counter = 0;
 
-    send_thread_advertisement(aInst);
+    while (!stopAdvertTask)
+    {
+        send_thread_advertisement(aInst);
+        
+        if (iterations != 0)
+        {
+            counter++;
+            if (counter >= iterations)
+            {
+                break;
+            }
+        }
 
+        // add delay to avoid flooding
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+
+    printf("Advertisement task stopped.\n");
+    vTaskDelete(NULL); // delete task when done
+}
+
+/**
+ * Starts the advertisement task
+ */
+void start_advert_task(otInstance *aInst, uint32_t iterations)
+{
+    if (advertTaskHandle != NULL)
+    {
+        printf("Advertisement task is already running.\n");
+        return;
+    }
+
+    stopAdvertTask = false;
+    // starts the task
+    xTaskCreate(advertTask, "Advertisement", 2048, (void *)&iterations, 5, &advertTaskHandle);
+    printf("Advertisement task started.\n");
+}
+
+/**
+ * Stops the advertisement task
+ */
+static void stop_advert_task()
+{
+    if (advertTaskHandle == NULL)
+    {
+        printf("No advertisement task is running.\n");
+        return;
+    }
+
+    stopAdvertTask = true;
+    printf("Signaled advertisement task to stop.\n");
+}
+
+/**
+ * Command which stops advertisement task
+ */
+static esp_err_t stop_advert_cmd(int *argc, char **argv)
+{
+    stop_advert_cmd();
     return ESP_OK;
 }
 
 /**
+ * Command which sends out the HomeNet advertisements
+ */
+static esp_err_t send_advert_cmd(int argc, char **argv) {
+    otInstance *aInst = get_ot_instance();
+    
+    // number of iterations (0 is forever)
+    uint32_t iterations = 0;
+
+    // check for args
+    if (argc == 2) {
+        iterations = atoi(argv[1]);
+
+        if (iterations < 0) {
+            printf("Invalid argument. Iterations must be a non-negative integer!\n");
+            return ESP_FAIL;
+        }
+    }
+
+    // special output depending on args
+    if (iterations == 0) {
+        printf("Running advertisement indefinitely...\n");
+        start_advert_task(aInst, iterations);
+    } else {
+        printf("Running advertisement for %u iterations...\n", iterations);
+        start_advert_task(aInst, iterations);
+    }
+
+    return ESP_OK;
+}
+
+
+/**
  * Command which scans for a peer
  */
-static int start_scan_cmd(int argc, char **argv) {
+static esp_err_t start_scan_cmd(int argc, char **argv) {
     otInstance *aInst = get_ot_instance();
 
     start_peer_scan(aInst);
@@ -369,7 +470,7 @@ static int start_scan_cmd(int argc, char **argv) {
     return ESP_OK;
 }
 
-static int send_verification_cmd(int argc, char **argv) {
+static esp_err_t send_verification_cmd(int argc, char **argv) {
     otInstance *aInst = get_ot_instance();
 
     // handle peer addr
@@ -400,6 +501,13 @@ static void register_commands() {
         .func = send_advert_cmd,
     };
     ESP_ERROR_CHECK(esp_console_cmd_register(&send_advert_cmd_struct));
+
+    const esp_console_cmd_t stop_advert_cmd_struct = {
+        .command = "stop_advert",
+        .help = "Stop thread advertisement",
+        .func = stop_advert_cmd,
+    };
+    ESP_ERROR_CHECK(esp_console_cmd_register(&stop_advert_cmd_struct));
 
     const esp_console_cmd_t start_scan_cmd_struct = {
         .command = "start_scan",
