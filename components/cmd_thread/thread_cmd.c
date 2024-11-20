@@ -359,7 +359,7 @@ static void start_verif_process(otInstance *aInst, otMesssageInfo *aMsgInfo)
 /**
  * Runs the advertisement task
  */
-void advert_task(void *argc)
+static void advert_task(void *argc)
 {
     otInstance *aInst = (otInstance *)argc;
     uint32_t iterations = *(uint32_t *)argc;
@@ -389,7 +389,7 @@ void advert_task(void *argc)
 /**
  * Starts the advertisement task
  */
-void start_advert_task(otInstance *aInst, uint32_t iterations)
+static void start_advert_task(otInstance *aInst, uint32_t iterations)
 {
     if (advertTaskHandle != NULL)
     {
