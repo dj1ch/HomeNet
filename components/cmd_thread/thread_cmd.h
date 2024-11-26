@@ -1,3 +1,3 @@
 #pragma once
 
-void register_thread_net(void);
+void register_thread(void);

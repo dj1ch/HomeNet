@@ -161,7 +161,7 @@ static void cmd_get_ipv6(int argc, char **argv)
 
 
 
-static void register_chat_commands(void)
+static void register_chat(void)
 {
     const esp_console_cmd_t get_nickname_cmd_struct = {
         .command = "get_nickname",
@@ -177,10 +177,6 @@ static void register_chat_commands(void)
 
     ESP_ERROR_CHECK(esp_console_cmd_register(&get_nickname_cmd_struct));
     ESP_ERROR_CHECK(esp_console_cmd_register(&get_ipv6_cmd_struct));
-}
 
-static void register_chat(void)
-{
-    register_chat_commands();
     printf("Chat system registered and ready.\n");
 }

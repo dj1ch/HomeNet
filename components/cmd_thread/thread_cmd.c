@@ -492,41 +492,6 @@ static esp_err_t send_verification_cmd(int argc, char **argv) {
 }
 
 /**
- * Register needed commands for HomeNet
- */
-static void register_commands() {
-    const esp_console_cmd_t send_advert_cmd_struct = {
-        .command = "send_advert",
-        .help = "Send a thread advertisement",
-        .func = send_advert_cmd,
-    };
-
-    const esp_console_cmd_t stop_advert_cmd_struct = {
-        .command = "stop_advert",
-        .help = "Stop thread advertisement",
-        .func = stop_advert_cmd,
-    };
-
-    const esp_console_cmd_t start_scan_cmd_struct = {
-        .command = "start_scan",
-        .help = "Start scanning for peers",
-        .func = start_scan_cmd,
-    };
-
-    const esp_console_cmd_t send_verification_cmd_struct = {
-        .command = "send_verification",
-        .help = "Send verification code to peer",
-        .func = send_verification_cmd,
-    };
-    
-    ESP_ERROR_CHECK(esp_console_cmd_register(&send_advert_cmd_struct));
-    ESP_ERROR_CHECK(esp_console_cmd_register(&stop_advert_cmd_struct));
-    ESP_ERROR_CHECK(esp_console_cmd_register(&start_scan_cmd_struct));
-    ESP_ERROR_CHECK(esp_console_cmd_register(&send_verification_cmd_struct));
-}
-
-
-/**
  * Finish last steps of verification
  */
 static void rcv_verif_code(otMessage *aMsg, otMesssageInfo *aMsgInfo)
@@ -572,8 +537,38 @@ static void rcv_verif_code(otMessage *aMsg, otMesssageInfo *aMsgInfo)
 /**
  * Creates an instance of thread and joins the network
  */
-static void register_thread_net(void)
+static void register_thread(void)
 {
+    // register commands
+    const esp_console_cmd_t send_advert_cmd_struct = {
+        .command = "send_advert",
+        .help = "Send a thread advertisement",
+        .func = send_advert_cmd,
+    };
+
+    const esp_console_cmd_t stop_advert_cmd_struct = {
+        .command = "stop_advert",
+        .help = "Stop thread advertisement",
+        .func = stop_advert_cmd,
+    };
+
+    const esp_console_cmd_t start_scan_cmd_struct = {
+        .command = "start_scan",
+        .help = "Start scanning for peers",
+        .func = start_scan_cmd,
+    };
+
+    const esp_console_cmd_t send_verification_cmd_struct = {
+        .command = "send_verification",
+        .help = "Send verification code to peer",
+        .func = send_verification_cmd,
+    };
+    
+    ESP_ERROR_CHECK(esp_console_cmd_register(&send_advert_cmd_struct));
+    ESP_ERROR_CHECK(esp_console_cmd_register(&stop_advert_cmd_struct));
+    ESP_ERROR_CHECK(esp_console_cmd_register(&start_scan_cmd_struct));
+    ESP_ERROR_CHECK(esp_console_cmd_register(&send_verification_cmd_struct));
+
     // create an instance
     otInstance *inst = otInstanceInitSingle();
 
@@ -587,7 +582,4 @@ static void register_thread_net(void)
     otSockAddr sockAddr = {.mPort = UDP_SOCK};
     otUdpOpen(inst, &udpSock, udp_rcv_cb, NULL);
     otUdpBind(inst, &udpSock, &sockAddr, OT_NETIF_THREAD);
-
-    // register commands for everything
-    register_commands();
 }
