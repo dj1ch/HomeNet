@@ -1,16 +1,15 @@
 dependencies:
   cmd_system:
-    dependencies: []
+    component_hash: null
     source:
-      path: /home/dj1ch/esp/esp-idf/examples/system/console/advanced/components/cmd_system
+      path: C:\Espressif\containers\v5.3\esp-idf\examples\system\console\advanced\components\cmd_system
       type: local
     version: '*'
   idf:
+    component_hash: null
     source:
       type: idf
-    version: 5.5.0
-direct_dependencies:
-- cmd_system
-manifest_hash: ef6c43c420498c2472a4719d380c6c19aad05459365e6cf22b16fc738d800113
+    version: 5.3.0
+manifest_hash: 5a1157b1332deee2fa2ef402b8c5322c5b53dfc00d5d9110e57606b1f61d483b
 target: esp32c6
-version: 2.0.0
+version: 1.0.0
