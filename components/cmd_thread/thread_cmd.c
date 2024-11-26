@@ -500,27 +500,28 @@ static void register_commands() {
         .help = "Send a thread advertisement",
         .func = send_advert_cmd,
     };
-    ESP_ERROR_CHECK(esp_console_cmd_register(&send_advert_cmd_struct));
 
     const esp_console_cmd_t stop_advert_cmd_struct = {
         .command = "stop_advert",
         .help = "Stop thread advertisement",
         .func = stop_advert_cmd,
     };
-    ESP_ERROR_CHECK(esp_console_cmd_register(&stop_advert_cmd_struct));
 
     const esp_console_cmd_t start_scan_cmd_struct = {
         .command = "start_scan",
         .help = "Start scanning for peers",
         .func = start_scan_cmd,
     };
-    ESP_ERROR_CHECK(esp_console_cmd_register(&start_scan_cmd_struct));
 
     const esp_console_cmd_t send_verification_cmd_struct = {
         .command = "send_verification",
         .help = "Send verification code to peer",
         .func = send_verification_cmd,
     };
+    
+    ESP_ERROR_CHECK(esp_console_cmd_register(&send_advert_cmd_struct));
+    ESP_ERROR_CHECK(esp_console_cmd_register(&stop_advert_cmd_struct));
+    ESP_ERROR_CHECK(esp_console_cmd_register(&start_scan_cmd_struct));
     ESP_ERROR_CHECK(esp_console_cmd_register(&send_verification_cmd_struct));
 }
 
@@ -552,6 +553,7 @@ static void rcv_verif_code(otMessage *aMsg, otMesssageInfo *aMsgInfo)
 
                     // save the peer by putting their address in NVS afterwards
                     esp_err_t err = nvs_set_blob(nvs_handle, "deviceA_addr", &peerSessions[i].peerAddr, sizeof(peerSessions[i].peerAddr));
+                    printf("Peer name saved in NVS!");
                     if (err != ESP_OK) {
                         printf("Failed to store peer address in NVS\n");
                     }
