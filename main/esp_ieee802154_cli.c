@@ -50,7 +50,7 @@ void app_main(void)
     register_system_common();
 
     /* Register HomeNet */
-    register_thread_net();
+    register_thread();
     register_chat();
 
 #if defined(CONFIG_ESP_CONSOLE_UART_DEFAULT) || defined(CONFIG_ESP_CONSOLE_UART_CUSTOM)
