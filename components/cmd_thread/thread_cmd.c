@@ -15,7 +15,7 @@
  * Thanks again, dj1ch
  */
 
-#include "thead_cmd.h"
+#include "thread_cmd.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -81,7 +81,8 @@ static int random(int min, int max) { return min + esp_random() % (max - min + 1
  * Finds the instance of OpenThread
  * within the code and returns it.
  */
-static otInstance *get_ot_instance() {
+static otInstance *get_ot_instance()
+{
     if (otInstancePtr == NULL) {
         // init only once!
         otInstancePtr = otInstanceInitSingle();

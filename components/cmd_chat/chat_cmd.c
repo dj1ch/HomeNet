@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "esp_console.h"
 #include "argtable3/argtable3.h"
@@ -44,7 +45,6 @@ static esp_err_t set_nickname(const char *ipv6_addr, const char *nickname)
     return err;
 }
 
-
 /**
  * Get the requested nickname(s) from NVS
  */
@@ -65,65 +65,90 @@ static esp_err_t get_nickname(const char *ipv6_addr, char *nickname, size_t len)
     return err;
 }
 
+/**
+ * Does a search through NVS to find an ipv6 address given a nickname
+ * Keep in mind the nickname and NVS are stored using a method
+ * which has the address set as the key, then the value set as the nickname
+ */
+static esp_err_t iterate_nvs_keys(nvs_handle_t handle, const char *nickname, char *ipv6_addr, size_t len)
+{
+    nvs_iterator_t it;
+    esp_err_t err = nvs_entry_find(NVS_DEFAULT_PART_NAME, "storage", NVS_TYPE_STR, &it);
+
+    // check if the iterator matches the requested address
+    while (it != NULL)
+    {
+        nvs_entry_info_t info;
+        nvs_entry_info(it, &info);
+        if (strcmp(info.key, nickname) == 0)
+        {
+            err = nvs_get_str(handle, info.key, ipv6_addr, &len);
+            nvs_release_iterator(it);
+            return err;
+        }
+        err = nvs_entry_next(&it);
+        if (err != ESP_OK) break;
+    }
+    return ESP_ERR_NOT_FOUND;
+}
+
+
+/**
+ * Finds the ipv6 address through a nickname
+ */
 static esp_err_t get_ipv6(const char *nickname, char *ipv6_addr, size_t len)
 {
     if (!nickname || !ipv6_addr || len == 0)
     {
         return ESP_ERR_INVALID_ARG;
     }
-
     nvs_handle_t handle;
     esp_err_t err = nvs_open("storage", NVS_READONLY, &handle);
-    if (err != ESP_OK) {
+    if (err != ESP_OK)
+    {
         return err;
     }
-
-    // iterate through all keys
-    size_t req_size;
-    err = nvs_get_all_keys(handle, NULL, &req_size);
-    if (err != ESP_OK) {
-        nvs_close(handle);
-        return err;
-    }
-
-    // get the list
-    char *keys = malloc(req_size);
-    if (keys == NULL) {
-        nvs_close(handle);
-        return ESP_ERR_NO_MEM;
-    }
-
-    err = nvs_get_all_keys(handle, keys, &req_size);
-    if (err != ESP_OK) {
-        free(keys);
-        nvs_close(handle);
-        return err;
-    }
-
-    // look for a match
-    esp_err_t result = ESP_ERR_NOT_FOUND; // not found
-    for (size_t i = 0; i < req_size / sizeof(char*); ++i) {
-        if (strcmp(&keys[i * sizeof(char*)], nickname) == 0) {
-            // if the key matches the nickname, find the addr
-            err = nvs_get_str(handle, &keys[i * sizeof(char*)], ipv6_addr, &len);
-            if (err == ESP_OK) {
-                result = ESP_OK;
-            }
-            break;
-        }
-    }
-
-    free(keys);
+    esp_err_t result = iterate_nvs_keys(handle, nickname, ipv6_addr, len);
     nvs_close(handle);
     return result;
 }
 
-
-static void cmd_get_nickname(int argc, char **argv)
+/**
+ * Command to set the nickname
+ */
+static int cmd_set_nickname(int argc, char **argv)
 {
-    if (argc != 2) {
+    if (argc != 3)
+    {
+        printf("Usage: set_nickname <ipv6_addr> <nickname>\n");
+        return -1;
+    }
+
+    const char *ipv6_addr = argv[1];
+    const char *nickname = argv[2];
+    esp_err_t err = set_nickname(ipv6_addr, nickname);
+
+    if (err == ESP_OK)
+    {
+        printf("Set nickname for %s as '%s'\n", ipv6_addr, nickname);
+        return 0;
+    }
+    else 
+    {
+        printf("Error setting nickname '%s' for %s", nickname, ipv6_addr);
+        return -1;
+    }
+}
+
+/**
+ * Command to get the nickname
+ */
+static int cmd_get_nickname(int argc, char **argv)
+{
+    if (argc != 2)
+    {
         printf("Usage: get_nickname <ipv6_addr>\n");
-        return;
+        return -1;
     }
 
     const char *ipv6_addr = argv[1];
@@ -132,49 +157,72 @@ static void cmd_get_nickname(int argc, char **argv)
 
     if (err == ESP_OK) {
         printf("Nickname for %s: %s\n", ipv6_addr, nickname);
-    } else if (err == ESP_ERR_NOT_FOUND) {
+        return 0;
+    } 
+    else if (err == ESP_ERR_NOT_FOUND)
+    {
         printf("No nickname found for %s\n", ipv6_addr);
-    } else {
+        return -1;
+    }
+    else {
         printf("Error retrieving nickname for %s: %s\n", ipv6_addr, esp_err_to_name(err));
+        return -1;
     }
 }
 
-static void cmd_get_ipv6(int argc, char **argv)
+/**
+ * Command to get the ipv6 address
+ */
+static int cmd_get_ipv6(int argc, char **argv)
 {
-    if (argc != 2) {
+    if (argc != 2)
+    {
         printf("Usage: get_ipv6 <nickname>\n");
-        return;
+        return -1;
     }
 
     const char *nickname = argv[1];
     char ipv6_addr[64];
-    esp_err_t err = get_ipv6_by_nickname(nickname, ipv6_addr, sizeof(ipv6_addr));
+    esp_err_t err = get_ipv6(nickname, ipv6_addr, sizeof(ipv6_addr));
 
     if (err == ESP_OK) {
         printf("IPv6 address for nickname '%s': %s\n", nickname, ipv6_addr);
-    } else if (err == ESP_ERR_NOT_FOUND) {
+        return 0;
+    }
+    else if (err == ESP_ERR_NOT_FOUND)
+    {
         printf("No IPv6 address found for nickname '%s'\n", nickname);
-    } else {
+        return -1;
+    }
+    else
+    {
         printf("Error retrieving IPv6 address for nickname '%s': %s\n", nickname, esp_err_to_name(err));
+        return -1;
     }
 }
 
 
 
-static void register_chat(void)
-{
+void register_chat(void) {
+    const esp_console_cmd_t set_nickname_cmd_struct = {
+        .command = "set_nickname",
+        .help = "Set the nickname for a specific ipv6 address",
+        .func = &cmd_set_nickname,
+    };
+
     const esp_console_cmd_t get_nickname_cmd_struct = {
         .command = "get_nickname",
         .help = "Get nickname through ipv6 address",
-        .func = get_nickname,
+        .func = &cmd_get_nickname,
     };
 
     const esp_console_cmd_t get_ipv6_cmd_struct = {
         .command = "get_ipv6",
         .help = "Get ipv6 address through nickname",
-        .func = get_ipv6,
+        .func = &cmd_get_ipv6,
     };
 
+    ESP_ERROR_CHECK(esp_console_cmd_register(&set_nickname_cmd_struct));
     ESP_ERROR_CHECK(esp_console_cmd_register(&get_nickname_cmd_struct));
     ESP_ERROR_CHECK(esp_console_cmd_register(&get_ipv6_cmd_struct));
 
