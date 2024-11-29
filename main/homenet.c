@@ -5,7 +5,6 @@
  */
 #include <stdio.h>
 #include <string.h>
-#include "ieee802154_cmd.h"
 #include "chat_cmd.h"
 #include "thread_cmd.h"
 #include "esp_system.h"
@@ -19,7 +18,7 @@
 #include "esp_phy_init.h"
 #include "cmd_system.h"
 
-#define PROMPT_STR "ieee802154"
+#define PROMPT_STR "homenet"
 
 static void initialize_nvs(void)
 {
