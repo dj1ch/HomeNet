@@ -15,10 +15,14 @@
     "idf.pythonBinPath": "/home/dj1ch/.espressif/python_env/idf5.5_py3.10_env/bin/python",
     "idf.toolsPath": "/home/dj1ch/.espressif",
     "files.associations": {
-        "esp_system.h": "c"
+        "esp_system.h": "c",
+        "instance.h": "c",
+        "message.h": "c",
+        "esp_mac.h": "c"
     },
     "idf.espIdfPathWin": "c:\\Espressif\\containers\\v5.3\\esp-idf",
     "idf.pythonBinPathWin": "c:\\Espressif\\tools\\python_env\\idf5.3_py3.11_env\\Scripts\\python.exe",
     "idf.toolsPathWin": "c:\\Espressif\\tools",
-    "idf.gitPathWin": "c:\\Espressif\\tools\\tools\\idf-git\\2.39.2\\cmd\\git.exe"
+    "idf.gitPathWin": "c:\\Espressif\\tools\\tools\\idf-git\\2.39.2\\cmd\\git.exe",
+    "idf.flashType": "UART"
 }
