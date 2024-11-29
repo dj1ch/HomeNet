@@ -46,7 +46,6 @@ void app_main(void)
 
     /* Register commands */
     esp_console_register_help_command();
-    register_ieee802154_cmd();
     register_system_common();
 
     /* Register HomeNet */
