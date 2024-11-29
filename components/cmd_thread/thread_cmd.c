@@ -38,9 +38,11 @@
 
 #include <openthread/instance.h>
 
+#include "nvs_flash.h"
+#include "nvs.h"
+
 // aww
 #define MAGIC_NUM 0x48616E616B6F
-#define UDP_SOCK 602
 
 #define MSG_SIZE 128
 #define ADVERT_SIZE 64
@@ -52,6 +54,25 @@
 
 #define MAX_PEERS 10
 
+static int random_range(int min, int max);
+static otInstance *get_ot_instance(void);
+static int generate_verif_code(void);
+static void random_ipv6_addr(otInstance *aInst);
+static void udp_advert_rcv_cb(otInstance *aInst, otMessage *aMsg, const otMessageInfo *aMsgInfo);
+static void send_udp_msg(otInstance *aInst, const char *msg, otIp6Address destAddr);
+static void send_thread_advertisement(otInstance *aInst);
+static void start_peer_scan(otInstance *aInst);
+static void start_verif_process(otInstance *aInst, otMessageInfo *aMsgInfo);
+static void advert_task(void *argc);
+static void start_advert_task(otInstance *aInst, uint32_t iterations);
+static void stop_advert_task(void);
+static esp_err_t stop_advert_cmd(int *argc, char **argv);
+static esp_err_t send_advert_cmd(int argc, char **argv);
+static esp_err_t start_scan_cmd(int argc, char **argv);
+static esp_err_t send_verification_cmd(int argc, char **argv);
+static void rcv_verif_code(otMessage *aMsg, otMessageInfo *aMsgInfo);
+void register_thread(void);
+
 typedef struct {
     otIp6Address peerAddr;
     int expected;
@@ -59,10 +80,6 @@ typedef struct {
 } peer_verif_session;
 
 static peer_verif_session peerSessions[MAX_PEERS] = {0};
-static struct {
-    struct arg_char *command;
-    struct arg_end *end;
-} thread_net_args;
 
 /**
  * OpenThread instance for singleton pattern
@@ -75,13 +92,13 @@ static TaskHandle_t advertTaskHandle = NULL;
 // stop flag for advertisement
 static bool stopAdvertTask = false;
 
-static int random(int min, int max) { return min + esp_random() % (max - min + 1); }
+static int random_range(int min, int max) { return min + esp_random() % (max - min + 1); }
 
 /**
  * Finds the instance of OpenThread
  * within the code and returns it.
  */
-static otInstance *get_ot_instance()
+static otInstance *get_ot_instance(void)
 {
     if (otInstancePtr == NULL) {
         // init only once!
@@ -104,13 +121,13 @@ static otInstance *get_ot_instance()
  */
 static int generate_verif_code(void)
 {
-    int randSize = random(5,10);
+    int randSize = random_range(5,10);
     int verifCode = 0;
 
     // improved verification code generator
     for (int i = 0; i < randSize; i++)
     {
-        int digit = random(1,9);
+        int digit = random_range(1,9);
         verifCode = verifCode * 10 + digit;
     }
 
@@ -166,7 +183,7 @@ static void udp_advert_rcv_cb(otInstance *aInst, otMessage *aMsg, const otMessag
     uint16_t len;
 
     len = otMessageGetLength(aMsg);
-    if (len > MAX_MSG_LEN)
+    if (len > MSG_SIZE)
     {
         printf("Message too long!\n");
         return;
@@ -180,19 +197,19 @@ static void udp_advert_rcv_cb(otInstance *aInst, otMessage *aMsg, const otMessag
     if (strncmp(buf, ADVERT_MSG_FORMAT, strlen(ADVERT_MSG_FORMAT)) == 0)
     {
         uint32_t magicNumber;
-        if (sscanf(buf + strlen(ADVERT_MSG_FORMAT), "%u", &magicNumber) == 1)
+        if (sscanf(buf + strlen(ADVERT_MSG_FORMAT), "%lu", (unsigned long *)&magicNumber) == 1)
         {
             // check for magic number
             if (magicNumber == MAGIC_NUM)
             {
-                printf("Received advertisement from a valid peer with magic number: %u\n", magicNumber);
+                printf("Received advertisement from a valid peer with magic number: %lu\n", (unsigned long)magicNumber);
                 
                 // to-do: handle this peer interaction
                 start_verif_process(aInst, aMsgInfo);
             }
             else
             {
-                printf("Received advertisement with an invalid magic number: %u\n", magicNumber);
+                printf("Received advertisement with an invalid magic number: %lu\n", (unsigned long)magicNumber);
             }
         }
         else
@@ -217,7 +234,7 @@ static void send_udp_msg(otInstance *aInst, const char *msg, otIp6Address destAd
     otMessage *udpMsg = otUdpNewMessage(aInst, NULL);
     
     otUdpSocket udpSock;
-    otSockAddr sockAddr = {.mPort = UDP_SOCK}; // to-do: make this publicly accessible or perhaps make a configuration file
+    otSockAddr sockAddr = {.mPort = 602};
 
     // find errors, and if not, send
     error = otMessageAppend(udpMsg, msg, strlen(msg));
@@ -225,9 +242,9 @@ static void send_udp_msg(otInstance *aInst, const char *msg, otIp6Address destAd
     {
         memset(&msgInfo, 0, sizeof(msgInfo));
         msgInfo.mPeerAddr = destAddr;
-        msgInfo.mPeerPort = UDP_SOCK; // put some BS info ig
+        msgInfo.mPeerPort = 602;
 
-        error = otUdpSend(aInst, &udpSock, udpMsg, &msgInfo);
+        error = otUdpSend(aInst, &sockAddr, msg, &msgInfo);
     }
 
     // error handling...?
@@ -247,7 +264,7 @@ static void send_thread_advertisement(otInstance *aInst)
     char advertMsg[ADVERT_SIZE];
 
     // create the message
-    snprintf(advertMsg, ADVERT_SIZE, "Thread device available, Magic Number: %u", MAGIC_NUM);
+    snprintf(advertMsg, ADVERT_SIZE, "Thread device available, Magic Number: %llu", MAGIC_NUM);
     memset(&msgInfo, 0, sizeof(msgInfo));
     
     msgInfo.mPeerAddr = *otThreadGetMeshLocalEid(aInst);
@@ -262,7 +279,7 @@ static void send_thread_advertisement(otInstance *aInst)
 
     // append advert and send it!
     otMessageAppend(msg, advertMsg, strlen(advertMsg));
-    otUdpSend(aInst, msg, &msgInfo);
+    otUdpSend(aInst, &msg, &msgInfo);
 
     printf("Advertisement sent: %s\n", advertMsg);
 }
@@ -276,7 +293,7 @@ static void start_peer_scan(otInstance *aInst)
     otError error;
 
     // create UDP socket
-    error = otUdpOpen(aInst, &udpSocket, udp_receive_callback, NULL);
+    error = otUdpOpen(aInst, &udpSocket, udp_advert_rcv_cb, NULL);
     if (error != OT_ERROR_NONE)
     {
         printf("Failed to open UDP socket!\n");
@@ -284,14 +301,14 @@ static void start_peer_scan(otInstance *aInst)
     }
 
     // bind socket to port
-    error = otUdpBind(aInst, &udpSocket, UDP_SOCK);
+    error = otUdpBind(aInst, &udpSocket, 602);
     if (error != OT_ERROR_NONE)
     {
         printf("Failed to bind UDP socket!\n");
         return;
     }
 
-    printf("Listening for peer advertisements on port %u\n", UDP_SOCK);
+    printf("Listening for peer advertisements on port %u\n", 602);
 }
 
 /**
@@ -310,7 +327,7 @@ static void start_peer_scan(otInstance *aInst)
  * Starts a peer interaction by exchanging a verification code,
  * which requires physical access to both devices.
  */
-static void start_verif_process(otInstance *aInst, otMesssageInfo *aMsgInfo)
+static void start_verif_process(otInstance *aInst, otMessageInfo *aMsgInfo)
 {
     // first get a code
     int code = generate_verif_code();
@@ -329,7 +346,7 @@ static void start_verif_process(otInstance *aInst, otMesssageInfo *aMsgInfo)
 
     // set important packet info
     otMessageInfo respInfo = *aMsgInfo;
-    responseInfo.mPeerPort = VERIF_PORT;
+    respInfo.mPeerPort = VERIF_PORT;
 
     // send it!
     otUdpSend(aInst, oMsg, &respInfo);
@@ -354,7 +371,7 @@ static void start_verif_process(otInstance *aInst, otMesssageInfo *aMsgInfo)
     }
 
     // wait
-    vTaskDelay(pdMSTOTICKS(TIMEOUT_MS));
+    vTaskDelay(pdMS_TO_TICKS(TIMEOUT_MS));
 }
 
 /**
@@ -400,14 +417,14 @@ static void start_advert_task(otInstance *aInst, uint32_t iterations)
 
     stopAdvertTask = false;
     // starts the task
-    xTaskCreate(advertTask, "Advertisement", 2048, (void *)&iterations, 5, &advertTaskHandle);
+    xTaskCreate(advert_task, "Advertisement", 2048, (void *)&iterations, 5, &advertTaskHandle);
     printf("Advertisement task started.\n");
 }
 
 /**
  * Stops the advertisement task
  */
-static void stop_advert_task()
+static void stop_advert_task(void)
 {
     if (advertTaskHandle == NULL)
     {
@@ -424,7 +441,7 @@ static void stop_advert_task()
  */
 static esp_err_t stop_advert_cmd(int *argc, char **argv)
 {
-    stop_advert_cmd();
+    stop_advert_task();
     return ESP_OK;
 }
 
@@ -452,7 +469,7 @@ static esp_err_t send_advert_cmd(int argc, char **argv) {
         printf("Running advertisement indefinitely...\n");
         start_advert_task(aInst, iterations);
     } else {
-        printf("Running advertisement for %u iterations...\n", iterations);
+        printf("Running advertisement for %lu iterations...\n", (unsigned long)iterations);
         start_advert_task(aInst, iterations);
     }
 
@@ -495,10 +512,11 @@ static esp_err_t send_verification_cmd(int argc, char **argv) {
 /**
  * Finish last steps of verification
  */
-static void rcv_verif_code(otMessage *aMsg, otMesssageInfo *aMsgInfo)
+static void rcv_verif_code(otMessage *aMsg, otMessageInfo *aMsgInfo)
 {
     char buf[MSG_SIZE];
     int receivedCode;
+    nvs_handle_t handle;
 
     // parse the message code
     uint16_t len = otMessageGetLength(aMsg);
@@ -518,7 +536,7 @@ static void rcv_verif_code(otMessage *aMsg, otMesssageInfo *aMsgInfo)
                     peerSessions[i].active = false;
 
                     // save the peer by putting their address in NVS afterwards
-                    esp_err_t err = nvs_set_blob(nvs_handle, "deviceA_addr", &peerSessions[i].peerAddr, sizeof(peerSessions[i].peerAddr));
+                    esp_err_t err = nvs_set_blob(handle, "deviceA_addr", &peerSessions[i].peerAddr, sizeof(peerSessions[i].peerAddr));
                     printf("Peer name saved in NVS!");
                     if (err != ESP_OK) {
                         printf("Failed to store peer address in NVS\n");
@@ -538,7 +556,7 @@ static void rcv_verif_code(otMessage *aMsg, otMesssageInfo *aMsgInfo)
 /**
  * Creates an instance of thread and joins the network
  */
-static void register_thread(void)
+void register_thread(void)
 {
     // register commands
     const esp_console_cmd_t send_advert_cmd_struct = {
@@ -550,7 +568,7 @@ static void register_thread(void)
     const esp_console_cmd_t stop_advert_cmd_struct = {
         .command = "stop_advert",
         .help = "Stop thread advertisement",
-        .func = stop_advert_cmd,
+        .func = &stop_advert_cmd,
     };
 
     const esp_console_cmd_t start_scan_cmd_struct = {
@@ -580,7 +598,7 @@ static void register_thread(void)
 
     // init UDP for messaging system
     otUdpSocket udpSock;
-    otSockAddr sockAddr = {.mPort = UDP_SOCK};
-    otUdpOpen(inst, &udpSock, udp_rcv_cb, NULL);
+    otSockAddr sockAddr = {.mPort = 602};
+    otUdpOpen(inst, &udpSock, udp_advert_rcv_cb, NULL);
     otUdpBind(inst, &udpSock, &sockAddr, OT_NETIF_THREAD);
 }
