@@ -94,6 +94,9 @@ static TaskHandle_t advertTaskHandle = NULL;
 // stop flag for advertisement
 static bool stopAdvertTask = false;
 
+// queue for advertisements
+static QueueHandle_t handshakeQueue;
+
 static int random_range(int min, int max) { return min + esp_random() % (max - min + 1); }
 
 /**
@@ -453,6 +456,47 @@ static void start_verif_process(otInstance *aInst, const otMessageInfo *aMsgInfo
 }
 
 /**
+ * UDP message recieving callback
+ */
+void msg_udp_receive_callback(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
+{
+    char buffer[128];
+    int length = otMessageRead(aMessage, otMessageGetOffset(aMessage), buffer, sizeof(buffer) - 1);
+
+    if (length >= 0)
+    {
+        buffer[length] = '\0';
+        printf("Received message: %s\n", buffer);
+    }
+    else
+    {
+        printf("Failed to read message\n");
+    }
+}
+
+/**
+ * UDP verification code recieving callback
+ */
+void verif_udp_receive_callback(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
+{
+    char buffer[16];
+    int length = otMessageRead(aMessage, otMessageGetOffset(aMessage), buffer, sizeof(buffer) - 1);
+
+    if (length > 0)
+    {
+        buffer[length] = '\0';
+        int received_code;
+        sscanf(buffer, "%d", &received_code);
+        printf("Received code: %d\n", received_code);
+
+        if (handshakeQueue != NULL)
+        {
+            xQueueSend(handshakeQueue, &received_code, 0);
+        }
+    }
+}
+
+/**
  * Runs the advertisement task
  */
 static void advert_task(void *argc)
@@ -512,6 +556,72 @@ static void stop_advert_task(void)
 
     stopAdvertTask = true;
     printf("Signaled advertisement task to stop.\n");
+}
+
+/**
+ * Gets the handshake and establishes a connection
+ */
+static void handshake_task(void *param)
+{
+    otInstance *aInst = get_ot_instance();
+    otUdpSocket udpSock;
+    otMessage *msg;
+    otMessageInfo msgInfo;
+    int verif_code, rcv_code;
+
+    // Initialize queue for handshake communication
+    handshakeQueue = xQueueCreate(1, sizeof(int));
+    if (handshakeQueue == NULL)
+    {
+        printf("Failed to create handshake queue\n");
+        vTaskDelete(NULL);
+        return;
+    }
+
+    // open socket and set the receive callback
+    memset(&udpSock, 0, sizeof(udpSock));
+    otUdpOpen(aInst, &udpSock, verif_udp_receive_callback, NULL);
+
+    memset(&msgInfo, 0, sizeof(msgInfo));
+    msgInfo.mPort = UDP_PORT;
+    otUdpBind(&udpSock, &msgInfo);
+
+    // step 1: generate and send verification code
+    verif_code = generate_verif_code();
+    printf("Generated verification code: %d\n", verif_code);
+
+    msg = otUdpNewMessage(aInst, NULL);
+    char code_str[16];
+    snprintf(code_str, sizeof(code_str), "%d", verif_code);
+    otMessageAppend(msg, code_str, strlen(code_str));
+
+    memset(&msgInfo, 0, sizeof(msgInfo));
+    otIp6AddressFromString("FF03::1", &msgInfo.mPeerAddr);
+
+    otUdpSend(aInst, &udpSock, msg, &msgInfo);
+    printf("Sent verification code\n");
+
+    // step 2: wait for the incremented verification code in the queue
+    while (true)
+    {
+        if (xQueueReceive(handshakeQueue, &rcv_code, portMAX_DELAY) == pdTRUE)
+        {
+            if (rcv_code == verif_code + 1)
+            {
+                printf("Handshake successful. Code verified: %d\n", rcv_code);
+                break;
+            }
+            else
+            {
+                printf("Invalid verification code received: %d\n", rcv_code);
+            }
+        }
+    }
+
+    // cleanup
+    otUdpClose(&udpSock);
+    vQueueDelete(handshakeQueue);
+    vTaskDelete(NULL);
 }
 
 /**
