@@ -61,7 +61,7 @@ static otInstance *get_ot_instance(void);
 static int generate_verif_code(void);
 static void random_ipv6_addr(otInstance *aInst);
 static void udp_advert_rcv_cb(void *aContext, otMessage *aMsg, const otMessageInfo *aMsgInfo);
-static void send_udp_msg(otInstance *aInst, const char *msg, otIp6Address destAddr);
+static void send_message(otInstance *aInst, const char *msg, otIp6Address *destAddr);
 static void send_thread_advertisement(otInstance *aInst);
 static void start_peer_scan(otInstance *aInst);
 static void start_verif_process(otInstance *aInst, const otMessageInfo *aMsgInfo);
@@ -229,7 +229,7 @@ static void udp_advert_rcv_cb(void *aContext, otMessage *aMsg, const otMessageIn
 /**
  * Send a message!
  */
-static void send_udp_msg(otInstance *aInst, const char *msg, otIp6Address destAddr)
+static void send_message(otInstance *aInst, const char *msg, otIp6Address *destAddr)
 {
     otError error;
     otMessageInfo msgInfo;
@@ -253,7 +253,6 @@ static void send_udp_msg(otInstance *aInst, const char *msg, otIp6Address destAd
         return;
     }
 
-    // append
     error = otMessageAppend(udpMsg, msg, strlen(msg));
     if (error != OT_ERROR_NONE)
     {
@@ -262,9 +261,8 @@ static void send_udp_msg(otInstance *aInst, const char *msg, otIp6Address destAd
         return;
     }
 
-    // set up info
     memset(&msgInfo, 0, sizeof(otMessageInfo));
-    msgInfo.mPeerAddr = destAddr;
+    msgInfo.mPeerAddr = *destAddr;
     msgInfo.mPeerPort = UDP_PORT;
 
     // send it!
@@ -517,6 +515,36 @@ static void stop_advert_task(void)
 }
 
 /**
+ * Command which sends a message
+ */
+static int send_message_cmd(int argc, char **argv)
+{
+    otInstance *aInst = get_ot_instance();
+
+    if (argc != 3)
+    {
+        printf("Usage: send_message <message> <ipv6_addr>\n");
+        return -1;
+    }
+
+    // conversions
+    const char *msg = argv[1];
+    otIp6Address destAddr;
+    otError error = otIp6AddressFromString(argv[2], &destAddr);
+    if (error != OT_ERROR_NONE)
+    {
+        printf("Invalid IPv6 address: %s\n", argv[2]);
+        return -1;
+    }
+
+    // send the message
+    send_message(aInst, msg, &destAddr);
+
+    printf("Sent message \"%s\" to destination %s\n", msg, argv[2]);
+    return 0;
+}
+
+/**
  * Command which stops advertisement task
  */
 static int stop_advert_cmd(int argc, char **argv)
@@ -647,6 +675,12 @@ static void rcv_verif_code(otMessage *aMsg, otMessageInfo *aMsgInfo)
 void register_thread(void)
 {
     // register commands
+    const esp_console_cmd_t send_message_cmd_struct = {
+        .command = "send_message",
+        .help = "Send a message to a peer",
+        .func = send_message_cmd,
+    };
+
     const esp_console_cmd_t send_advert_cmd_struct = {
         .command = "send_advert",
         .help = "Send a thread advertisement",
@@ -671,6 +705,7 @@ void register_thread(void)
         .func = send_verification_cmd,
     };
     
+    ESP_ERROR_CHECK(esp_console_cmd_register(&send_message_cmd_struct));
     ESP_ERROR_CHECK(esp_console_cmd_register(&send_advert_cmd_struct));
     ESP_ERROR_CHECK(esp_console_cmd_register(&stop_advert_cmd_struct));
     ESP_ERROR_CHECK(esp_console_cmd_register(&start_scan_cmd_struct));
