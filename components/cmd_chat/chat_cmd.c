@@ -116,7 +116,7 @@ static esp_err_t get_ipv6(const char *nickname, char *ipv6_addr, size_t len)
 /**
  * Command to set the nickname
  */
-static int cmd_set_nickname(int argc, char **argv)
+static int set_nickname_cmd(int argc, char **argv)
 {
     if (argc != 3)
     {
@@ -143,7 +143,7 @@ static int cmd_set_nickname(int argc, char **argv)
 /**
  * Command to get the nickname
  */
-static int cmd_get_nickname(int argc, char **argv)
+static int get_nickname_cmd(int argc, char **argv)
 {
     if (argc != 2)
     {
@@ -173,7 +173,7 @@ static int cmd_get_nickname(int argc, char **argv)
 /**
  * Command to get the ipv6 address
  */
-static int cmd_get_ipv6(int argc, char **argv)
+static int get_ipv6_cmd(int argc, char **argv)
 {
     if (argc != 2)
     {
@@ -207,19 +207,19 @@ void register_chat(void) {
     const esp_console_cmd_t set_nickname_cmd_struct = {
         .command = "set_nickname",
         .help = "Set the nickname for a specific ipv6 address",
-        .func = &cmd_set_nickname,
+        .func = &set_nickname_cmd,
     };
 
     const esp_console_cmd_t get_nickname_cmd_struct = {
         .command = "get_nickname",
         .help = "Get nickname through ipv6 address",
-        .func = &cmd_get_nickname,
+        .func = &get_nickname_cmd,
     };
 
     const esp_console_cmd_t get_ipv6_cmd_struct = {
         .command = "get_ipv6",
         .help = "Get ipv6 address through nickname",
-        .func = &cmd_get_ipv6,
+        .func = &get_ipv6_cmd,
     };
 
     ESP_ERROR_CHECK(esp_console_cmd_register(&set_nickname_cmd_struct));
