@@ -32,6 +32,10 @@
 #include "openthread/instance.h"
 #include "openthread/ip6.h"
 #include "openthread/logging.h"
+#include "openthread/cli.h"
+#include "openthread/platform/misc.h"
+#include "openthread/thread.h"
+#include "openthread/diag.h"
 #include "esp_netif.h"
 #include "esp_netif_types.h"
 #include "esp_openthread.h"
@@ -86,11 +90,11 @@ static void handshake_task(void *pvParameters);
 static void listening_task(void *pvParameters);
 static void sending_task(void *pvParameters);
 static void start_chat(char *ipv6_addr);
-static int stop_advert_cmd(int argc, char **argv);
-static int send_advert_cmd(int argc, char **argv);
-static int start_scan_cmd(int argc, char **argv);
-static int send_verification_cmd(int argc, char **argv);
-static int start_chat_cmd(int argc, char **argv);
+static otError stop_advert_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]);
+static otError send_advert_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]);
+static otError start_scan_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]);
+static otError send_verification_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]);
+static otError start_chat_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]);
 void register_thread(void);
 
 typedef struct {
@@ -774,58 +778,59 @@ static void start_chat(char *ipv6_addr)
 /**
  * Command which sends a message
  */
-static int send_message_cmd(int argc, char **argv)
+static otError send_message_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
 {
     otInstance *aInst = get_ot_instance();
 
-    if (argc != 3)
+    // Check if the correct number of arguments is passed
+    if (aArgsLength != 2)
     {
         printf("Usage: send_message <message> <ipv6_addr>\n");
-        return -1;
+        return OT_ERROR_FAILED;
     }
 
     // conversions
-    const char *msg = argv[1];
+    const char *msg = aArgs[0];
     otIp6Address destAddr;
-    otError error = otIp6AddressFromString(argv[2], &destAddr);
+    otError error = otIp6AddressFromString(aArgs[1], &destAddr);
     if (error != OT_ERROR_NONE)
     {
-        printf("Invalid IPv6 address: %s\n", argv[2]);
-        return -1;
+        printf("Invalid IPv6 address: %s\n", aArgs[1]);
+        return OT_ERROR_FAILED;
     }
 
     // send the message
     send_message(aInst, msg, &destAddr);
 
-    printf("Sent message \"%s\" to destination %s\n", msg, argv[2]);
-    return 0;
+    printf("Sent message \"%s\" to destination %s\n", msg, aArgs[1]);
+    return OT_ERROR_NONE;
 }
 
 /**
- * Command which stops advertisement task
+ * Command to stop advertisement task
  */
-static int stop_advert_cmd(int argc, char **argv)
+static otError stop_advert_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
 {
     stop_advert_task();
-    return 0;
+    return OT_ERROR_NONE;
 }
 
 /**
- * Command which sends out the HomeNet advertisements
+ * Command to send out HomeNet advertisements
  */
-static int send_advert_cmd(int argc, char **argv) {
+static otError send_advert_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
+{
     otInstance *aInst = get_ot_instance();
-    
+
     // number of iterations (0 is forever)
     uint32_t iterations = 0;
 
-    // check for args
-    if (argc == 2) {
-        iterations = atoi(argv[1]);
+    if (aArgsLength == 1) {
+        iterations = atoi(aArgs[0]);
 
         if (iterations <= 0) {
             printf("Invalid argument. Iterations must be a non-negative integer!\n");
-            return -1;
+            return OT_ERROR_FAILED;
         }
     }
 
@@ -838,38 +843,40 @@ static int send_advert_cmd(int argc, char **argv) {
         start_advert_task(aInst, iterations);
     }
 
-    return 0;
+    return OT_ERROR_NONE;
 }
 
-
 /**
- * Command which scans for a peer
+ * Command to scan for a peer
  */
-static int start_scan_cmd(int argc, char **argv) {
+static otError start_scan_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
+{
     otInstance *aInst = get_ot_instance();
 
     start_peer_scan(aInst);
 
-    return 0;
+    return OT_ERROR_NONE;
 }
 
 /**
  * Command to send the verification code
  */
-static int send_verification_cmd(int argc, char **argv) {
+static otError send_verification_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
+{
     otInstance *aInst = get_ot_instance();
 
-    if (argc != 2) {
+    if (aArgsLength != 1)
+    {
         printf("Usage: send_verification <peer_address>\n");
-        return -1;
+        return OT_ERROR_FAILED;
     }
 
     otIp6Address peerAddr;
 
-    // convert the string to the correct structure
-    if (otIp6AddressFromString(argv[1], &peerAddr) != OT_ERROR_NONE) {
+    if (otIp6AddressFromString(aArgs[0], &peerAddr) != OT_ERROR_NONE)
+    {
         printf("Invalid peer address format\n");
-        return -1;
+        return OT_ERROR_FAILED;
     }
 
     otMessageInfo msgInfo = {
@@ -879,72 +886,29 @@ static int send_verification_cmd(int argc, char **argv) {
 
     start_verif_process(aInst, &msgInfo);
 
-    return 0;
+    return OT_ERROR_NONE;
 }
 
-static int start_chat_cmd(int argc, char **argv)
+static otError start_chat_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
 {
-    if (argc != 2)
+    if (aArgsLength != 1)
     {
         printf("Usage: start_chat <ipv6_addr>");
-        return -1;
+        return OT_ERROR_FAILED;
     }
 
-    char *ipv6_addr = argv[1];
+    char *ipv6_addr = aArgs[0];
 
     start_chat(ipv6_addr);
-    return 0;
+    return OT_ERROR_NONE;
 }
+
 
 /**
  * Creates an instance of thread and joins the network
  */
 void register_thread(void)
 {
-    // register commands
-    const esp_console_cmd_t start_chat_cmd_struct = {
-        .command = "start_chat",
-        .help = "Start a chat with a peer",
-        .func = &start_chat_cmd,
-    };
-
-    const esp_console_cmd_t send_message_cmd_struct = {
-        .command = "send_message",
-        .help = "Send a message to a peer",
-        .func = &send_message_cmd,
-    };
-
-    const esp_console_cmd_t send_advert_cmd_struct = {
-        .command = "send_advert",
-        .help = "Send a thread advertisement",
-        .func = &send_advert_cmd,
-    };
-
-    const esp_console_cmd_t stop_advert_cmd_struct = {
-        .command = "stop_advert",
-        .help = "Stop thread advertisement",
-        .func = &stop_advert_cmd,
-    };
-
-    const esp_console_cmd_t start_scan_cmd_struct = {
-        .command = "start_scan",
-        .help = "Start scanning for peers",
-        .func = &start_scan_cmd,
-    };
-
-    const esp_console_cmd_t send_verification_cmd_struct = {
-        .command = "send_verification",
-        .help = "Send verification code to peer",
-        .func = &send_verification_cmd,
-    };
-    
-    ESP_ERROR_CHECK(esp_console_cmd_register(&start_chat_cmd_struct));
-    ESP_ERROR_CHECK(esp_console_cmd_register(&send_message_cmd_struct));
-    ESP_ERROR_CHECK(esp_console_cmd_register(&send_advert_cmd_struct));
-    ESP_ERROR_CHECK(esp_console_cmd_register(&stop_advert_cmd_struct));
-    ESP_ERROR_CHECK(esp_console_cmd_register(&start_scan_cmd_struct));
-    ESP_ERROR_CHECK(esp_console_cmd_register(&send_verification_cmd_struct));
-
     // vfs config
     esp_vfs_eventfd_config_t eventfd_config = {.max_fds = 3};
     ESP_ERROR_CHECK(esp_event_loop_create_default());
@@ -1003,9 +967,18 @@ void register_thread(void)
     esp_cli_custom_command_init();
 #endif // CONFIG_OPENTHREAD_CLI_ESP_EXTENSION
 
-    // Run the main loop
+    // register commands
 #if CONFIG_OPENTHREAD_CLI
     esp_openthread_cli_create_task();
+    const otCliCommand kCommands[] = {
+        {"start_chat", start_chat_cmd},
+        {"send_message", send_message_cmd},
+        {"send_advert", send_advert_cmd},
+        {"stop_advert", stop_advert_cmd},
+        {"start_scan", start_scan_cmd},
+        {"send_verification", send_verification_cmd}
+    };
+    otCliSetUserCommands(kCommands, OT_ARRAY_LENGTH(kCommands), aInst);
 #endif
 #if CONFIG_OPENTHREAD_AUTO_START
     otOperationalDatasetTlvs dataset;
