@@ -68,6 +68,10 @@ static void start_verif_process(otInstance *aInst, const otMessageInfo *aMsgInfo
 static void advert_task(void *argc);
 static void start_advert_task(otInstance *aInst, uint32_t iterations);
 static void stop_advert_task(void);
+static void handshake_task(void *pvParameters);
+static void listening_task(void *pvParameters);
+static void sending_task(void *pvParameters);
+static void start_chat(void);
 static esp_err_t stop_advert_cmd(int argc, char **argv);
 static esp_err_t send_advert_cmd(int argc, char **argv);
 static esp_err_t start_scan_cmd(int argc, char **argv);
@@ -96,6 +100,7 @@ static bool stopAdvertTask = false;
 
 // queue for advertisements
 static QueueHandle_t handshakeQueue;
+static QueueHandle_t messageQueue;
 
 static int random_range(int min, int max) { return min + esp_random() % (max - min + 1); }
 
@@ -561,7 +566,7 @@ static void stop_advert_task(void)
 /**
  * Gets the handshake and establishes a connection
  */
-static void handshake_task(void *param)
+static void handshake_task(void *pvParameters)
 {
     otInstance *aInst = get_ot_instance();
     otUdpSocket udpSock;
@@ -569,7 +574,7 @@ static void handshake_task(void *param)
     otMessageInfo msgInfo;
     int verif_code, rcv_code;
 
-    // Initialize queue for handshake communication
+    // create queue for the handshakes
     handshakeQueue = xQueueCreate(1, sizeof(int));
     if (handshakeQueue == NULL)
     {
@@ -583,8 +588,9 @@ static void handshake_task(void *param)
     otUdpOpen(aInst, &udpSock, verif_udp_receive_callback, NULL);
 
     memset(&msgInfo, 0, sizeof(msgInfo));
-    msgInfo.mPort = UDP_PORT;
-    otUdpBind(&udpSock, &msgInfo);
+    otSockAddr sockAddr = {0};
+    sockAddr.mPort = UDP_PORT;
+    otUdpBind(aInst, &udpSock, &sockAddr, OT_NETIF_UNSPECIFIED);
 
     // step 1: generate and send verification code
     verif_code = generate_verif_code();
@@ -619,9 +625,98 @@ static void handshake_task(void *param)
     }
 
     // cleanup
-    otUdpClose(&udpSock);
+    otUdpClose(aInst, &udpSock);
     vQueueDelete(handshakeQueue);
     vTaskDelete(NULL);
+}
+
+/**
+ * Task that listens for oncoming messages
+ */
+static void listening_task(void *pvParameters)
+{
+    otInstance *aInst = (otInstance *)pvParameters;
+    otUdpSocket udpSock;
+
+    memset(&udpSock, 0, sizeof(udpSock));
+    otUdpOpen(aInst, &udpSock, msg_udp_receive_callback, NULL);
+
+    otSockAddr sockAddr = {0};
+    sockAddr.mPort = UDP_PORT;
+    otUdpBind(aInst, &udpSock, &sockAddr, OT_NETIF_UNSPECIFIED);
+
+    printf("Listening for incoming messages...\n");
+    while (true)
+    {
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+
+    otUdpClose(aInst, &udpSock);
+    vTaskDelete(NULL);
+}
+
+/**
+ * Task to send messages
+ */
+static void sending_task(void *pvParameters)
+{
+    otInstance *aInst = (otInstance *)pvParameters;
+    char message[128];
+
+    while (true)
+    {
+        if (xQueueReceive(messageQueue, message, portMAX_DELAY) == pdTRUE)
+        {
+            otMessage *msg = otUdpNewMessage(aInst, NULL);
+            otMessageAppend(msg, message, strlen(message));
+
+            otMessageInfo msgInfo;
+            memset(&msgInfo, 0, sizeof(msgInfo));
+            msgInfo.mPeerPort = UDP_PORT;
+            otIp6AddressFromString("FF03::1", &msgInfo.mPeerAddr);
+
+            otUdpSend(aInst, NULL, msg, &msgInfo);
+            printf("Message sent: %s\n", message);
+        }
+    }
+}
+
+/**
+ * Controls the chat between the two devices
+ */
+static void start_chat(void)
+{
+    otInstance *aInst = get_ot_instance();
+    messageQueue = xQueueCreate(5, sizeof(char) * 128);
+
+    xTaskCreate(handshake_task, "Handshake Task", 4096, aInst, 1, NULL);
+
+    // wait for a handshake
+    vTaskDelay(pdMS_TO_TICKS(5000));
+
+    xTaskCreate(listening_task, "Listening Task", 4096, aInst, 1, NULL);
+    xTaskCreate(sending_task, "Sending Task", 4096, aInst, 1, NULL);
+
+    while (true)
+    {
+        char command[32];
+        printf("Enter command (send/end_chat): ");
+        scanf("%31s", command);
+
+        if (strcmp(command, "send") == 0)
+        {
+            char message[128];
+            printf("Enter message: ");
+            scanf("%127s", message);
+            xQueueSend(messageQueue, message, 0);
+        }
+        else if (strcmp(command, "end_chat") == 0)
+        {
+            printf("Ending chat...\n");
+            vTaskDelete(NULL);
+            break;
+        }
+    }
 }
 
 /**
