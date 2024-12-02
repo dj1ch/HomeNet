@@ -32,7 +32,11 @@ static void initialize_nvs(void)
 
 void app_main(void)
 {
-    esp_ieee802154_enable();
+    /**
+     * Start NVS before anything
+     */
+    initialize_nvs();
+
     esp_console_repl_t *repl = NULL;
     esp_console_repl_config_t repl_config = ESP_CONSOLE_REPL_CONFIG_DEFAULT();
     /* Prompt to be printed before each line.
@@ -40,8 +44,6 @@ void app_main(void)
      */
     repl_config.prompt = PROMPT_STR ">";
     repl_config.max_cmdline_length = 256;
-
-    initialize_nvs();
 
     /* Register commands */
     esp_console_register_help_command();

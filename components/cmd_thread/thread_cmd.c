@@ -51,6 +51,8 @@ uint64_t magic_num = 0x48616E616B6F;
 #define UDP_PORT 602
 #define VERIF_PORT 603
 #define MAX_PEERS 10
+#define PROMPT_STR "homenet"
+#define TAG "homenet"
 
 /**
  * Function definitions
@@ -954,6 +956,10 @@ void register_thread(void)
 
     // create an instance
     otInstance *aInst = otInstanceInitSingle();
+    if (aInst == NULL) {
+        ESP_LOGE(TAG, "Failed to initialize OpenThread instance");
+        return;
+    }
 
     // start interface
     otIp6SetEnabled(aInst, true);
