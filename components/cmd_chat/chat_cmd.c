@@ -8,16 +8,13 @@
  */
 
 #include "chat_cmd.h"
-
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
-
 #include "esp_console.h"
 #include "argtable3/argtable3.h"
 #include "esp_log.h"
-
 #include "esp_system.h"
 #include "nvs_flash.h"
 #include "nvs.h"

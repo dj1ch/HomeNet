@@ -16,67 +16,69 @@
  */
 
 #include "thread_cmd.h"
-
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
-
 #include "esp_system.h"
 #include "esp_random.h"
 #include "esp_mac.h"
-
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-
 #include "openthread/instance.h"
 #include "openthread/thread.h"
 #include "openthread/message.h"
 #include "openthread/udp.h"
-
+#include "openthread/instance.h"
+#include "openthread/ip6.h"
 #include "esp_console.h"
 #include "argtable3/argtable3.h"
 #include "esp_log.h"
-
-#include <openthread/instance.h>
-
 #include "nvs_flash.h"
 #include "nvs.h"
 
-// aww
+/**
+ * Special magic number
+ */
 uint64_t magic_num = 0x48616E616B6F;
 
+/**
+ * Important definitions
+ */
 #define MSG_SIZE 128
 #define ADVERT_SIZE 64
-
 #define ADVERT_MSG_FORMAT "Thread device available, Magic Number: "
-
 #define TIMEOUT_MS 10000
 #define UDP_PORT 602
 #define VERIF_PORT 603
-
 #define MAX_PEERS 10
 
+/**
+ * Function definitions
+ */
 static int random_range(int min, int max);
 static otInstance *get_ot_instance(void);
 static int generate_verif_code(void);
 static void random_ipv6_addr(otInstance *aInst);
 static void udp_advert_rcv_cb(void *aContext, otMessage *aMsg, const otMessageInfo *aMsgInfo);
+static void udp_msg_rcv_cb(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
+static void udp_verif_rcv_cb(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
 static void send_message(otInstance *aInst, const char *msg, otIp6Address *destAddr);
 static void send_thread_advertisement(otInstance *aInst);
 static void start_peer_scan(otInstance *aInst);
 static void start_verif_process(otInstance *aInst, const otMessageInfo *aMsgInfo);
+static void rcv_verif_code(otMessage *aMsg, otMessageInfo *aMsgInfo);
 static void advert_task(void *argc);
 static void start_advert_task(otInstance *aInst, uint32_t iterations);
 static void stop_advert_task(void);
 static void handshake_task(void *pvParameters);
 static void listening_task(void *pvParameters);
 static void sending_task(void *pvParameters);
-static void start_chat(void);
-static esp_err_t stop_advert_cmd(int argc, char **argv);
-static esp_err_t send_advert_cmd(int argc, char **argv);
-static esp_err_t start_scan_cmd(int argc, char **argv);
-static esp_err_t send_verification_cmd(int argc, char **argv);
-static void rcv_verif_code(otMessage *aMsg, otMessageInfo *aMsgInfo);
+static void start_chat(char *ipv6_addr);
+static int stop_advert_cmd(int argc, char **argv);
+static int send_advert_cmd(int argc, char **argv);
+static int start_scan_cmd(int argc, char **argv);
+static int send_verification_cmd(int argc, char **argv);
+static int start_chat_cmd(int argc, char **argv);
 void register_thread(void);
 
 typedef struct {
@@ -92,16 +94,25 @@ static peer_verif_session peerSessions[MAX_PEERS] = {0};
  */
 static otInstance *otInstancePtr = NULL;
 
-// advertisement task handle
+/**
+ * Advertisement task handle
+ */
 static TaskHandle_t advertTaskHandle = NULL;
 
-// stop flag for advertisement
+/**
+ * Stop flag for advertisement task
+ */
 static bool stopAdvertTask = false;
 
-// queue for advertisements
+/**
+ * Queue for handshakes and messaging
+ */
 static QueueHandle_t handshakeQueue;
 static QueueHandle_t messageQueue;
 
+/**
+ * Generates a random number given a minimum and maximum range
+ */
 static int random_range(int min, int max) { return min + esp_random() % (max - min + 1); }
 
 /**
@@ -231,6 +242,47 @@ static void udp_advert_rcv_cb(void *aContext, otMessage *aMsg, const otMessageIn
     else
     {
         printf("Received message does not match expected format!\n");
+    }
+}
+
+/**
+ * UDP message recieving callback
+ */
+static void udp_msg_rcv_cb(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
+{
+    char buffer[128];
+    int length = otMessageRead(aMessage, otMessageGetOffset(aMessage), buffer, sizeof(buffer) - 1);
+
+    if (length >= 0)
+    {
+        buffer[length] = '\0';
+        printf("Received message: %s\n", buffer);
+    }
+    else
+    {
+        printf("Failed to read message\n");
+    }
+}
+
+/**
+ * UDP verification code recieving callback
+ */
+static void udp_verif_rcv_cb(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
+{
+    char buffer[16];
+    int length = otMessageRead(aMessage, otMessageGetOffset(aMessage), buffer, sizeof(buffer) - 1);
+
+    if (length > 0)
+    {
+        buffer[length] = '\0';
+        int received_code;
+        sscanf(buffer, "%d", &received_code);
+        printf("Received code: %d\n", received_code);
+
+        if (handshakeQueue != NULL)
+        {
+            xQueueSend(handshakeQueue, &received_code, 0);
+        }
     }
 }
 
@@ -461,43 +513,46 @@ static void start_verif_process(otInstance *aInst, const otMessageInfo *aMsgInfo
 }
 
 /**
- * UDP message recieving callback
+ * Finish last steps of verification
  */
-void msg_udp_receive_callback(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
+static void rcv_verif_code(otMessage *aMsg, otMessageInfo *aMsgInfo)
 {
-    char buffer[128];
-    int length = otMessageRead(aMessage, otMessageGetOffset(aMessage), buffer, sizeof(buffer) - 1);
+    char buf[MSG_SIZE];
+    int receivedCode;
+    nvs_handle_t handle;
 
-    if (length >= 0)
-    {
-        buffer[length] = '\0';
-        printf("Received message: %s\n", buffer);
+    // parse the message code
+    uint16_t len = otMessageGetLength(aMsg);
+    if (len >= MSG_SIZE) {
+        printf("Received message too long!\n");
+        return;
     }
-    else
-    {
-        printf("Failed to read message\n");
-    }
-}
+    otMessageRead(aMsg, 0, buf, len);
+    buf[len] = '\0';
 
-/**
- * UDP verification code recieving callback
- */
-void verif_udp_receive_callback(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
-{
-    char buffer[16];
-    int length = otMessageRead(aMessage, otMessageGetOffset(aMessage), buffer, sizeof(buffer) - 1);
+    // check if received code is valid
+    if (sscanf(buf, "Verification Code: %d", &receivedCode) == 1) {
+        for (int i = 0; i < MAX_PEERS; i++) {
+            if (peerSessions[i].active && otIp6IsAddressEqual(&peerSessions[i].peerAddr, &aMsgInfo->mPeerAddr)) {
+                if (receivedCode == peerSessions[i].expected) {
+                    printf("Peer successfully verified with code: %d\n", receivedCode);
+                    peerSessions[i].active = false;
 
-    if (length > 0)
-    {
-        buffer[length] = '\0';
-        int received_code;
-        sscanf(buffer, "%d", &received_code);
-        printf("Received code: %d\n", received_code);
-
-        if (handshakeQueue != NULL)
-        {
-            xQueueSend(handshakeQueue, &received_code, 0);
+                    // save the peer by putting their address in NVS afterwards
+                    esp_err_t err = nvs_set_blob(handle, "deviceA_addr", &peerSessions[i].peerAddr, sizeof(peerSessions[i].peerAddr));
+                    printf("Peer name saved in NVS!");
+                    if (err != ESP_OK) {
+                        printf("Failed to store peer address in NVS\n");
+                    }
+                } else {
+                    printf("Invalid verification response code: %d\n", receivedCode);
+                }
+                return;
+            }
         }
+        printf("Verification session not found for this peer!\n");
+    } else {
+        printf("Failed to parse verification response!\n");
     }
 }
 
@@ -585,7 +640,7 @@ static void handshake_task(void *pvParameters)
 
     // open socket and set the receive callback
     memset(&udpSock, 0, sizeof(udpSock));
-    otUdpOpen(aInst, &udpSock, verif_udp_receive_callback, NULL);
+    otUdpOpen(aInst, &udpSock, udp_verif_rcv_cb, NULL);
 
     memset(&msgInfo, 0, sizeof(msgInfo));
     otSockAddr sockAddr = {0};
@@ -639,7 +694,7 @@ static void listening_task(void *pvParameters)
     otUdpSocket udpSock;
 
     memset(&udpSock, 0, sizeof(udpSock));
-    otUdpOpen(aInst, &udpSock, msg_udp_receive_callback, NULL);
+    otUdpOpen(aInst, &udpSock, udp_msg_rcv_cb, NULL);
 
     otSockAddr sockAddr = {0};
     sockAddr.mPort = UDP_PORT;
@@ -684,7 +739,7 @@ static void sending_task(void *pvParameters)
 /**
  * Controls the chat between the two devices
  */
-static void start_chat(void)
+static void start_chat(char *ipv6_addr)
 {
     otInstance *aInst = get_ot_instance();
     messageQueue = xQueueCreate(5, sizeof(char) * 128);
@@ -696,6 +751,10 @@ static void start_chat(void)
 
     xTaskCreate(listening_task, "Listening Task", 4096, aInst, 1, NULL);
     xTaskCreate(sending_task, "Sending Task", 4096, aInst, 1, NULL);
+
+    char peerAddress[40];
+    strncpy(peerAddress, ipv6_addr, sizeof(peerAddress) - 1);
+    peerAddress[sizeof(peerAddress) - 1] = '\0';
 
     while (true)
     {
@@ -830,48 +889,18 @@ static int send_verification_cmd(int argc, char **argv) {
     return 0;
 }
 
-/**
- * Finish last steps of verification
- */
-static void rcv_verif_code(otMessage *aMsg, otMessageInfo *aMsgInfo)
+static int start_chat_cmd(int argc, char **argv)
 {
-    char buf[MSG_SIZE];
-    int receivedCode;
-    nvs_handle_t handle;
-
-    // parse the message code
-    uint16_t len = otMessageGetLength(aMsg);
-    if (len >= MSG_SIZE) {
-        printf("Received message too long!\n");
-        return;
+    if (argc != 2)
+    {
+        printf("Usage: start_chat <ipv6_addr>");
+        return -1;
     }
-    otMessageRead(aMsg, 0, buf, len);
-    buf[len] = '\0';
 
-    // check if received code is valid
-    if (sscanf(buf, "Verification Code: %d", &receivedCode) == 1) {
-        for (int i = 0; i < MAX_PEERS; i++) {
-            if (peerSessions[i].active && otIp6IsAddressEqual(&peerSessions[i].peerAddr, &aMsgInfo->mPeerAddr)) {
-                if (receivedCode == peerSessions[i].expected) {
-                    printf("Peer successfully verified with code: %d\n", receivedCode);
-                    peerSessions[i].active = false;
+    char *ipv6_addr = argv[1];
 
-                    // save the peer by putting their address in NVS afterwards
-                    esp_err_t err = nvs_set_blob(handle, "deviceA_addr", &peerSessions[i].peerAddr, sizeof(peerSessions[i].peerAddr));
-                    printf("Peer name saved in NVS!");
-                    if (err != ESP_OK) {
-                        printf("Failed to store peer address in NVS\n");
-                    }
-                } else {
-                    printf("Invalid verification response code: %d\n", receivedCode);
-                }
-                return;
-            }
-        }
-        printf("Verification session not found for this peer!\n");
-    } else {
-        printf("Failed to parse verification response!\n");
-    }
+    start_chat(ipv6_addr);
+    return 0;
 }
 
 /**
@@ -880,36 +909,43 @@ static void rcv_verif_code(otMessage *aMsg, otMessageInfo *aMsgInfo)
 void register_thread(void)
 {
     // register commands
+    const esp_console_cmd_t start_chat_cmd_struct = {
+        .command = "start_chat",
+        .help = "Start a chat with a peer",
+        .func = &start_chat_cmd,
+    };
+
     const esp_console_cmd_t send_message_cmd_struct = {
         .command = "send_message",
         .help = "Send a message to a peer",
-        .func = send_message_cmd,
+        .func = &send_message_cmd,
     };
 
     const esp_console_cmd_t send_advert_cmd_struct = {
         .command = "send_advert",
         .help = "Send a thread advertisement",
-        .func = send_advert_cmd,
+        .func = &send_advert_cmd,
     };
 
     const esp_console_cmd_t stop_advert_cmd_struct = {
         .command = "stop_advert",
         .help = "Stop thread advertisement",
-        .func = stop_advert_cmd,
+        .func = &stop_advert_cmd,
     };
 
     const esp_console_cmd_t start_scan_cmd_struct = {
         .command = "start_scan",
         .help = "Start scanning for peers",
-        .func = start_scan_cmd,
+        .func = &start_scan_cmd,
     };
 
     const esp_console_cmd_t send_verification_cmd_struct = {
         .command = "send_verification",
         .help = "Send verification code to peer",
-        .func = send_verification_cmd,
+        .func = &send_verification_cmd,
     };
     
+    ESP_ERROR_CHECK(esp_console_cmd_register(&start_chat_cmd_struct));
     ESP_ERROR_CHECK(esp_console_cmd_register(&send_message_cmd_struct));
     ESP_ERROR_CHECK(esp_console_cmd_register(&send_advert_cmd_struct));
     ESP_ERROR_CHECK(esp_console_cmd_register(&stop_advert_cmd_struct));
@@ -917,16 +953,16 @@ void register_thread(void)
     ESP_ERROR_CHECK(esp_console_cmd_register(&send_verification_cmd_struct));
 
     // create an instance
-    otInstance *inst = otInstanceInitSingle();
+    otInstance *aInst = otInstanceInitSingle();
 
     // start interface
-    otIp6SetEnabled(inst, true);
-    otThreadSetEnabled(inst, true);
-    random_ipv6_addr(inst);
+    otIp6SetEnabled(aInst, true);
+    otThreadSetEnabled(aInst, true);
+    random_ipv6_addr(aInst);
 
     // init UDP for messaging system
     otUdpSocket udpSock;
     otSockAddr sockAddr = {.mPort = UDP_PORT};
-    otUdpOpen(inst, &udpSock, udp_advert_rcv_cb, NULL);
-    otUdpBind(inst, &udpSock, &sockAddr, OT_NETIF_THREAD);
+    otUdpOpen(aInst, &udpSock, udp_advert_rcv_cb, NULL);
+    otUdpBind(aInst, &udpSock, &sockAddr, OT_NETIF_THREAD);
 }
