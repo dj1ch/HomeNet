@@ -22,6 +22,7 @@
 #include "esp_system.h"
 #include "esp_random.h"
 #include "esp_mac.h"
+#include "esp_event.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include "openthread/instance.h"
@@ -30,6 +31,16 @@
 #include "openthread/udp.h"
 #include "openthread/instance.h"
 #include "openthread/ip6.h"
+#include "openthread/logging.h"
+#include "esp_netif.h"
+#include "esp_netif_types.h"
+#include "esp_openthread.h"
+#include "esp_openthread_cli.h"
+#include "esp_openthread_lock.h"
+#include "esp_openthread_netif_glue.h"
+#include "esp_openthread_types.h"
+#include "esp_ot_config.h"
+#include "esp_vfs_eventfd.h"
 #include "esp_console.h"
 #include "argtable3/argtable3.h"
 #include "esp_log.h"
@@ -68,7 +79,6 @@ static void send_message(otInstance *aInst, const char *msg, otIp6Address *destA
 static void send_thread_advertisement(otInstance *aInst);
 static void start_peer_scan(otInstance *aInst);
 static void start_verif_process(otInstance *aInst, const otMessageInfo *aMsgInfo);
-static void rcv_verif_code(otMessage *aMsg, otMessageInfo *aMsgInfo);
 static void advert_task(void *argc);
 static void start_advert_task(otInstance *aInst, uint32_t iterations);
 static void stop_advert_task(void);
@@ -111,6 +121,11 @@ static bool stopAdvertTask = false;
  */
 static QueueHandle_t handshakeQueue;
 static QueueHandle_t messageQueue;
+
+/**
+ * Static NVS handle
+ */
+static nvs_handle_t handle;
 
 /**
  * Generates a random number given a minimum and maximum range
@@ -271,20 +286,41 @@ static void udp_msg_rcv_cb(void *aContext, otMessage *aMessage, const otMessageI
  */
 static void udp_verif_rcv_cb(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
 {
-    char buffer[16];
-    int length = otMessageRead(aMessage, otMessageGetOffset(aMessage), buffer, sizeof(buffer) - 1);
+    char buf[MSG_SIZE];
+    int receivedCode;
 
-    if (length > 0)
-    {
-        buffer[length] = '\0';
-        int received_code;
-        sscanf(buffer, "%d", &received_code);
-        printf("Received code: %d\n", received_code);
+    // parse the message code
+    uint16_t len = otMessageGetLength(aMessage);
+    if (len >= MSG_SIZE) {
+        printf("Received message too long!\n");
+        return;
+    }
+    otMessageRead(aMessage, 0, buf, len);
+    buf[len] = '\0';
 
-        if (handshakeQueue != NULL)
-        {
-            xQueueSend(handshakeQueue, &received_code, 0);
+    // check if received code is valid
+    if (sscanf(buf, "Verification Code: %d", &receivedCode) == 1) {
+        for (int i = 0; i < MAX_PEERS; i++) {
+            if (peerSessions[i].active && otIp6IsAddressEqual(&peerSessions[i].peerAddr, &aMessageInfo->mPeerAddr)) {
+                if (receivedCode == peerSessions[i].expected) {
+                    printf("Peer successfully verified with code: %d\n", receivedCode);
+                    peerSessions[i].active = false;
+
+                    // save the peer by putting their address in NVS afterwards
+                    esp_err_t err = nvs_set_blob(handle, "deviceA_addr", &peerSessions[i].peerAddr, sizeof(peerSessions[i].peerAddr));
+                    printf("Peer name saved in NVS!");
+                    if (err != ESP_OK) {
+                        printf("Failed to store peer address in NVS\n");
+                    }
+                } else {
+                    printf("Invalid verification response code: %d\n", receivedCode);
+                }
+                return;
+            }
         }
+        printf("Verification session not found for this peer!\n");
+    } else {
+        printf("Failed to parse verification response!\n");
     }
 }
 
@@ -454,7 +490,6 @@ static void start_verif_process(otInstance *aInst, const otMessageInfo *aMsgInfo
 {
     int code = generate_verif_code();
     int expected = code + 1;
-    nvs_handle_t handle;
 
     otUdpSocket udpSocket = {};
 
@@ -512,50 +547,6 @@ static void start_verif_process(otInstance *aInst, const otMessageInfo *aMsgInfo
     }
 
     vTaskDelay(pdMS_TO_TICKS(TIMEOUT_MS));
-}
-
-/**
- * Finish last steps of verification
- */
-static void rcv_verif_code(otMessage *aMsg, otMessageInfo *aMsgInfo)
-{
-    char buf[MSG_SIZE];
-    int receivedCode;
-    nvs_handle_t handle;
-
-    // parse the message code
-    uint16_t len = otMessageGetLength(aMsg);
-    if (len >= MSG_SIZE) {
-        printf("Received message too long!\n");
-        return;
-    }
-    otMessageRead(aMsg, 0, buf, len);
-    buf[len] = '\0';
-
-    // check if received code is valid
-    if (sscanf(buf, "Verification Code: %d", &receivedCode) == 1) {
-        for (int i = 0; i < MAX_PEERS; i++) {
-            if (peerSessions[i].active && otIp6IsAddressEqual(&peerSessions[i].peerAddr, &aMsgInfo->mPeerAddr)) {
-                if (receivedCode == peerSessions[i].expected) {
-                    printf("Peer successfully verified with code: %d\n", receivedCode);
-                    peerSessions[i].active = false;
-
-                    // save the peer by putting their address in NVS afterwards
-                    esp_err_t err = nvs_set_blob(handle, "deviceA_addr", &peerSessions[i].peerAddr, sizeof(peerSessions[i].peerAddr));
-                    printf("Peer name saved in NVS!");
-                    if (err != ESP_OK) {
-                        printf("Failed to store peer address in NVS\n");
-                    }
-                } else {
-                    printf("Invalid verification response code: %d\n", receivedCode);
-                }
-                return;
-            }
-        }
-        printf("Verification session not found for this peer!\n");
-    } else {
-        printf("Failed to parse verification response!\n");
-    }
 }
 
 /**
@@ -954,21 +945,77 @@ void register_thread(void)
     ESP_ERROR_CHECK(esp_console_cmd_register(&start_scan_cmd_struct));
     ESP_ERROR_CHECK(esp_console_cmd_register(&send_verification_cmd_struct));
 
-    // create an instance
+    // vfs config
+    esp_vfs_eventfd_config_t eventfd_config = {.max_fds = 3};
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
+    ESP_ERROR_CHECK(esp_netif_init());
+    ESP_ERROR_CHECK(esp_vfs_eventfd_register(&eventfd_config));
+
+    // openthread platform configuration
+    esp_openthread_platform_config_t config = {
+        .radio_config = ESP_OPENTHREAD_DEFAULT_RADIO_CONFIG(),
+        .host_config = ESP_OPENTHREAD_DEFAULT_HOST_CONFIG(),
+        .port_config = ESP_OPENTHREAD_DEFAULT_PORT_CONFIG(),
+    };
+    ESP_ERROR_CHECK(esp_openthread_init(&config));
+
+#if CONFIG_OPENTHREAD_STATE_INDICATOR_ENABLE
+    ESP_ERROR_CHECK(esp_openthread_state_indicator_init(esp_openthread_get_instance()));
+#endif
+
+#if CONFIG_OPENTHREAD_LOG_LEVEL_DYNAMIC
+    (void)otLoggingSetLevel(CONFIG_LOG_DEFAULT_LEVEL);
+#endif
+#if CONFIG_OPENTHREAD_CLI
+    esp_openthread_cli_init();
+#endif
+
+    // init network interface
+    esp_netif_config_t cfg = ESP_NETIF_DEFAULT_OPENTHREAD();
+    esp_netif_t *openthread_netif = esp_netif_new(&cfg);
+    assert(openthread_netif != NULL);
+    ESP_ERROR_CHECK(esp_netif_attach(openthread_netif, esp_openthread_netif_glue_init(&config)));
+    esp_netif_set_default_netif(openthread_netif);
+
+    // init openthread instance
     otInstance *aInst = otInstanceInitSingle();
     if (aInst == NULL) {
         ESP_LOGE(TAG, "Failed to initialize OpenThread instance");
         return;
     }
 
-    // start interface
+    // enable ipv6
+    esp_openthread_lock_acquire(0);
     otIp6SetEnabled(aInst, true);
-    otThreadSetEnabled(aInst, true);
+    otLinkSetEnabled(aInst, true);
+    esp_openthread_lock_release();
+
+    // generate a random ipv6 address
     random_ipv6_addr(aInst);
 
     // init UDP for messaging system
     otUdpSocket udpSock;
     otSockAddr sockAddr = {.mPort = UDP_PORT};
-    otUdpOpen(aInst, &udpSock, udp_advert_rcv_cb, NULL);
-    otUdpBind(aInst, &udpSock, &sockAddr, OT_NETIF_THREAD);
+    ESP_ERROR_CHECK(otUdpOpen(aInst, &udpSock, udp_advert_rcv_cb, NULL));
+    ESP_ERROR_CHECK(otUdpBind(aInst, &udpSock, &sockAddr, OT_NETIF_THREAD));
+
+#if CONFIG_OPENTHREAD_CLI_ESP_EXTENSION
+    esp_cli_custom_command_init();
+#endif // CONFIG_OPENTHREAD_CLI_ESP_EXTENSION
+
+    // Run the main loop
+#if CONFIG_OPENTHREAD_CLI
+    esp_openthread_cli_create_task();
+#endif
+#if CONFIG_OPENTHREAD_AUTO_START
+    otOperationalDatasetTlvs dataset;
+    otError error = otDatasetGetActiveTlvs(esp_openthread_get_instance(), &dataset);
+    ESP_ERROR_CHECK(esp_openthread_auto_start((error == OT_ERROR_NONE) ? &dataset : NULL));
+#endif
+    esp_openthread_launch_mainloop();
+
+    // cleanup after mainloop stops
+    esp_openthread_netif_glue_deinit();
+    esp_netif_destroy(openthread_netif);
+    esp_vfs_eventfd_unregister();
 }

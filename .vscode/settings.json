@@ -22,7 +22,15 @@
         "esp_log.h": "c",
         "ip6.h": "c",
         "task.h": "c",
-        "freertos.h": "c"
+        "freertos.h": "c",
+        "esp_openthread_types.h": "c",
+        "logging.h": "c",
+        "radio.h": "c",
+        "system.h": "c",
+        "openthread-system.h": "c",
+        "esp_netif_types.h": "c",
+        "alarm-milli.h": "c",
+        "nvs.h": "c"
     },
     "idf.espIdfPathWin": "c:\\Espressif\\containers\\v5.3\\esp-idf",
     "idf.pythonBinPathWin": "c:\\Espressif\\tools\\python_env\\idf5.3_py3.11_env\\Scripts\\python.exe",
