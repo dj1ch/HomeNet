@@ -16,6 +16,7 @@
  */
 
 #include "thread_cmd.h"
+#include "chat_cmd.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
@@ -73,7 +74,6 @@ uint64_t magic_num = 0x48616E616B6F;
  * Function definitions
  */
 static int random_range(int min, int max);
-static otInstance *get_ot_instance(void);
 static int generate_verif_code(void);
 static void random_ipv6_addr(otInstance *aInst);
 static void udp_advert_rcv_cb(void *aContext, otMessage *aMsg, const otMessageInfo *aMsgInfo);
@@ -108,7 +108,7 @@ static peer_verif_session peerSessions[MAX_PEERS] = {0};
 /**
  * OpenThread instance for singleton pattern
  */
-static otInstance *otInstancePtr = NULL;
+otInstance *otInstancePtr = NULL;
 
 /**
  * Advertisement task handle
@@ -140,7 +140,7 @@ static int random_range(int min, int max) { return min + esp_random() % (max - m
  * Finds the instance of OpenThread
  * within the code and returns it.
  */
-static otInstance *get_ot_instance(void)
+otInstance *get_ot_instance(void)
 {
     if (otInstancePtr == NULL) {
         // init only once!
@@ -423,7 +423,7 @@ static void send_thread_advertisement(otInstance *aInst)
     }
 
     // send it!
-    otUdpSocket udpSock;
+    otUdpSocket udpSock; // to-do: fill this out!
     error = otUdpOpen(aInst, &udpSock, NULL, NULL);
     if (error != OT_ERROR_NONE)
     {
@@ -971,6 +971,9 @@ void register_thread(void)
 #if CONFIG_OPENTHREAD_CLI
     esp_openthread_cli_create_task();
     const otCliCommand kCommands[] = {
+        {"set_nickname", set_nickname_cmd},
+        {"get_nickname", get_nickname_cmd},
+        {"get_ipv6", get_ipv6_cmd},
         {"start_chat", start_chat_cmd},
         {"send_message", send_message_cmd},
         {"send_advert", send_advert_cmd},

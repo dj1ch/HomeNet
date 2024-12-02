@@ -8,10 +8,31 @@
  */
 
 #include "chat_cmd.h"
+#include "thread_cmd.h"
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
+#include "openthread/instance.h"
+#include "openthread/thread.h"
+#include "openthread/message.h"
+#include "openthread/udp.h"
+#include "openthread/instance.h"
+#include "openthread/ip6.h"
+#include "openthread/logging.h"
+#include "openthread/cli.h"
+#include "openthread/platform/misc.h"
+#include "openthread/thread.h"
+#include "openthread/diag.h"
+#include "esp_netif.h"
+#include "esp_netif_types.h"
+#include "esp_openthread.h"
+#include "esp_openthread_cli.h"
+#include "esp_openthread_lock.h"
+#include "esp_openthread_netif_glue.h"
+#include "esp_openthread_types.h"
+#include "esp_ot_config.h"
+#include "esp_vfs_eventfd.h"
 #include "esp_console.h"
 #include "argtable3/argtable3.h"
 #include "esp_log.h"
@@ -113,16 +134,16 @@ static esp_err_t get_ipv6(const char *nickname, char *ipv6_addr, size_t len)
 /**
  * Command to set the nickname
  */
-static int set_nickname_cmd(int argc, char **argv)
+otError set_nickname_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
 {
-    if (argc != 3)
+    if (aArgsLength != 3)
     {
         printf("Usage: set_nickname <ipv6_addr> <nickname>\n");
         return -1;
     }
 
-    const char *ipv6_addr = argv[1];
-    const char *nickname = argv[2];
+    const char *ipv6_addr = aArgs[1];
+    const char *nickname = aArgs[2];
     esp_err_t err = set_nickname(ipv6_addr, nickname);
 
     if (err == ESP_OK)
@@ -140,15 +161,15 @@ static int set_nickname_cmd(int argc, char **argv)
 /**
  * Command to get the nickname
  */
-static int get_nickname_cmd(int argc, char **argv)
+otError get_nickname_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
 {
-    if (argc != 2)
+    if (aArgsLength != 2)
     {
         printf("Usage: get_nickname <ipv6_addr>\n");
         return -1;
     }
 
-    const char *ipv6_addr = argv[1];
+    const char *ipv6_addr = aArgs[1];
     char nickname[64];
     esp_err_t err = get_nickname(ipv6_addr, nickname, sizeof(nickname));
 
@@ -170,15 +191,15 @@ static int get_nickname_cmd(int argc, char **argv)
 /**
  * Command to get the ipv6 address
  */
-static int get_ipv6_cmd(int argc, char **argv)
+otError get_ipv6_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
 {
-    if (argc != 2)
+    if (aArgsLength != 2)
     {
         printf("Usage: get_ipv6 <nickname>\n");
         return -1;
     }
 
-    const char *nickname = argv[1];
+    const char *nickname = aArgs[1];
     char ipv6_addr[64];
     esp_err_t err = get_ipv6(nickname, ipv6_addr, sizeof(ipv6_addr));
 
@@ -196,32 +217,4 @@ static int get_ipv6_cmd(int argc, char **argv)
         printf("Error retrieving IPv6 address for nickname '%s': %s\n", nickname, esp_err_to_name(err));
         return -1;
     }
-}
-
-
-
-void register_chat(void) {
-    const esp_console_cmd_t set_nickname_cmd_struct = {
-        .command = "set_nickname",
-        .help = "Set the nickname for a specific ipv6 address",
-        .func = &set_nickname_cmd,
-    };
-
-    const esp_console_cmd_t get_nickname_cmd_struct = {
-        .command = "get_nickname",
-        .help = "Get nickname through ipv6 address",
-        .func = &get_nickname_cmd,
-    };
-
-    const esp_console_cmd_t get_ipv6_cmd_struct = {
-        .command = "get_ipv6",
-        .help = "Get ipv6 address through nickname",
-        .func = &get_ipv6_cmd,
-    };
-
-    ESP_ERROR_CHECK(esp_console_cmd_register(&set_nickname_cmd_struct));
-    ESP_ERROR_CHECK(esp_console_cmd_register(&get_nickname_cmd_struct));
-    ESP_ERROR_CHECK(esp_console_cmd_register(&get_ipv6_cmd_struct));
-
-    printf("Chat system registered and ready.\n");
 }

@@ -17,7 +17,6 @@
 #include "esp_openthread_types.h"
 
 #if SOC_IEEE802154_SUPPORTED
-#define OT_ARRAY_LENGTH(aArray) (sizeof(aArray) / sizeof(aArray[0]))
 #define ESP_OPENTHREAD_DEFAULT_RADIO_CONFIG()              \
     {                                                      \
         .radio_mode = RADIO_MODE_NATIVE,                   \

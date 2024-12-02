@@ -17,6 +17,7 @@
 #include "esp_ieee802154.h"
 #include "esp_phy_init.h"
 #include "cmd_system.h"
+#include "esp_openthread.h"
 
 #define PROMPT_STR "homenet"
 
@@ -51,7 +52,6 @@ void app_main(void)
 
     /* Register HomeNet */
     register_thread();
-    register_chat();
 
 #if defined(CONFIG_ESP_CONSOLE_UART_DEFAULT) || defined(CONFIG_ESP_CONSOLE_UART_CUSTOM)
     esp_console_dev_uart_config_t hw_config = ESP_CONSOLE_DEV_UART_CONFIG_DEFAULT();
