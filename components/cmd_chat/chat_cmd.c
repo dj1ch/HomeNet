@@ -139,7 +139,7 @@ otError set_nickname_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
     if (aArgsLength != 3)
     {
         printf("Usage: set_nickname <ipv6_addr> <nickname>\n");
-        return -1;
+        return OT_ERROR_FAILED;
     }
 
     const char *ipv6_addr = aArgs[1];
@@ -149,12 +149,12 @@ otError set_nickname_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
     if (err == ESP_OK)
     {
         printf("Set nickname for %s as '%s'\n", ipv6_addr, nickname);
-        return 0;
+        return OT_ERROR_NONE;
     }
     else 
     {
         printf("Error setting nickname '%s' for %s", nickname, ipv6_addr);
-        return -1;
+        return OT_ERROR_FAILED;
     }
 }
 
@@ -166,7 +166,7 @@ otError get_nickname_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
     if (aArgsLength != 2)
     {
         printf("Usage: get_nickname <ipv6_addr>\n");
-        return -1;
+        return OT_ERROR_FAILED;
     }
 
     const char *ipv6_addr = aArgs[1];
@@ -175,16 +175,16 @@ otError get_nickname_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
 
     if (err == ESP_OK) {
         printf("Nickname for %s: %s\n", ipv6_addr, nickname);
-        return 0;
+        return OT_ERROR_NONE;
     } 
     else if (err == ESP_ERR_NOT_FOUND)
     {
         printf("No nickname found for %s\n", ipv6_addr);
-        return -1;
+        return OT_ERROR_FAILED;
     }
     else {
         printf("Error retrieving nickname for %s: %s\n", ipv6_addr, esp_err_to_name(err));
-        return -1;
+        return OT_ERROR_FAILED;
     }
 }
 
@@ -196,7 +196,7 @@ otError get_ipv6_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
     if (aArgsLength != 2)
     {
         printf("Usage: get_ipv6 <nickname>\n");
-        return -1;
+        return OT_ERROR_FAILED;
     }
 
     const char *nickname = aArgs[1];
@@ -205,16 +205,16 @@ otError get_ipv6_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
 
     if (err == ESP_OK) {
         printf("IPv6 address for nickname '%s': %s\n", nickname, ipv6_addr);
-        return 0;
+        return OT_ERROR_NONE;
     }
     else if (err == ESP_ERR_NOT_FOUND)
     {
         printf("No IPv6 address found for nickname '%s'\n", nickname);
-        return -1;
+        return OT_ERROR_FAILED;
     }
     else
     {
         printf("Error retrieving IPv6 address for nickname '%s': %s\n", nickname, esp_err_to_name(err));
-        return -1;
+        return OT_ERROR_FAILED;
     }
 }
