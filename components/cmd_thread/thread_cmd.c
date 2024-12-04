@@ -76,6 +76,8 @@ uint64_t magic_num = 0x48616E616B6F;
 static int random_range(int min, int max);
 static int generate_verif_code(void);
 static void random_ipv6_addr(otInstance *aInst);
+static otIp6Address get_ipv6_address(otInstance *aInst);
+static void init_udp_sock(otInstance *aInst);
 static void udp_advert_rcv_cb(void *aContext, otMessage *aMsg, const otMessageInfo *aMsgInfo);
 static void udp_msg_rcv_cb(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
 static void udp_verif_rcv_cb(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
@@ -102,6 +104,9 @@ typedef struct {
     int expected;
     bool active;     
 } peer_verif_session;
+
+static otUdpSocket udpSock;
+static otSockAddr sockAddr;
 
 static peer_verif_session peerSessions[MAX_PEERS] = {0};
 
@@ -216,6 +221,44 @@ static void random_ipv6_addr(otInstance *aInst)
 }
 
 /**
+ * Gets current ipv6 address to be used for other structures or functions
+ */
+static otIp6Address get_ipv6_address(otInstance *aInst)
+{
+    const otNetifAddress *addr = otIp6GetUnicastAddresses(aInst);
+
+    // check for unicast addresses, and if there are none, return nothing
+    while (addr != NULL)
+    {
+        if ((addr->mAddress.mFields.m8[0] == 0xfe) && ((addr->mAddress.mFields.m8[1] & 0xc0) == 0x80))
+        {
+            return addr->mAddress;
+        }
+        addr = addr->mNext;
+    }
+
+    otIp6Address unspecifAddr = {0};
+    return unspecifAddr;
+}
+
+/**
+ * Initializes sockAddr and udpSock so everything works correctly
+ */
+static void init_udp_sock(otInstance *aInst)
+{
+    otIp6Address ipv6Addr = get_ipv6_address(aInst);
+
+    sockAddr.mAddress = ipv6Addr;
+    sockAddr.mPort = UDP_PORT;
+
+    udpSock.mSockName = sockAddr;
+    udpSock.mPeerName.mPort = 0;
+    udpSock.mHandler = udp_advert_rcv_cb;
+    udpSock.mContext = NULL;
+    udpSock.mHandle = NULL;
+}
+
+/**
  * Setup UDP for communication
  * and recieve messages in a callback
  */
@@ -247,7 +290,6 @@ static void udp_advert_rcv_cb(void *aContext, otMessage *aMsg, const otMessageIn
             {
                 printf("Received advertisement from a valid peer with magic number: %lu\n", (unsigned long)magicNumber);
                 
-                // to-do: handle this peer interaction
                 start_verif_process(aInst, aMsgInfo);
             }
             else
@@ -336,7 +378,6 @@ static void send_message(otInstance *aInst, const char *msg, otIp6Address *destA
     otError error;
     otMessageInfo msgInfo;
     otMessage *udpMsg;
-    otUdpSocket udpSock;
 
     // init
     memset(&udpSock, 0, sizeof(otUdpSocket));
@@ -423,7 +464,6 @@ static void send_thread_advertisement(otInstance *aInst)
     }
 
     // send it!
-    otUdpSocket udpSock; // to-do: fill this out!
     error = otUdpOpen(aInst, &udpSock, NULL, NULL);
     if (error != OT_ERROR_NONE)
     {
@@ -451,12 +491,11 @@ static void send_thread_advertisement(otInstance *aInst)
  */
 static void start_peer_scan(otInstance *aInst)
 {
-    otUdpSocket udpSocket;
     otError error;
-    otSockAddr sockAddr = { .mPort = UDP_PORT };
 
     // create UDP socket
-    error = otUdpOpen(aInst, &udpSocket, udp_advert_rcv_cb, NULL);
+    udpSock.mHandler = udp_advert_rcv_cb;
+    error = otUdpOpen(aInst, &udpSock, udp_advert_rcv_cb, NULL);
     if (error != OT_ERROR_NONE)
     {
         printf("Failed to open UDP socket!\n");
@@ -464,7 +503,7 @@ static void start_peer_scan(otInstance *aInst)
     }
 
     // bind socket to port
-    error = otUdpBind(aInst, &udpSocket, &sockAddr, OT_NETIF_THREAD);
+    error = otUdpBind(aInst, &udpSock, &sockAddr, OT_NETIF_THREAD);
     if (error != OT_ERROR_NONE)
     {
         printf("Failed to bind UDP socket!\n");
@@ -495,8 +534,6 @@ static void start_verif_process(otInstance *aInst, const otMessageInfo *aMsgInfo
     int code = generate_verif_code();
     int expected = code + 1;
 
-    otUdpSocket udpSocket = {};
-
     char msg[MSG_SIZE];
     snprintf(msg, MSG_SIZE, "Verification Code: %d", code);
 
@@ -510,7 +547,7 @@ static void start_verif_process(otInstance *aInst, const otMessageInfo *aMsgInfo
     otMessageInfo respInfo = *aMsgInfo;
     respInfo.mPeerPort = VERIF_PORT;
 
-    otUdpSend(aInst, &udpSocket, oMsg, &respInfo);
+    otUdpSend(aInst, &udpSock, oMsg, &respInfo);
 
     printf("Sent verification code to peer: %d\n", code);
 
@@ -621,7 +658,6 @@ static void stop_advert_task(void)
 static void handshake_task(void *pvParameters)
 {
     otInstance *aInst = get_ot_instance();
-    otUdpSocket udpSock;
     otMessage *msg;
     otMessageInfo msgInfo;
     int verif_code, rcv_code;
@@ -640,8 +676,6 @@ static void handshake_task(void *pvParameters)
     otUdpOpen(aInst, &udpSock, udp_verif_rcv_cb, NULL);
 
     memset(&msgInfo, 0, sizeof(msgInfo));
-    otSockAddr sockAddr = {0};
-    sockAddr.mPort = UDP_PORT;
     otUdpBind(aInst, &udpSock, &sockAddr, OT_NETIF_UNSPECIFIED);
 
     // step 1: generate and send verification code
@@ -687,14 +721,12 @@ static void handshake_task(void *pvParameters)
  */
 static void listening_task(void *pvParameters)
 {
-    otInstance *aInst = (otInstance *)pvParameters;
-    otUdpSocket udpSock;
+    otInstance *aInst = get_ot_instance();
 
     memset(&udpSock, 0, sizeof(udpSock));
     otUdpOpen(aInst, &udpSock, udp_msg_rcv_cb, NULL);
 
-    otSockAddr sockAddr = {0};
-    sockAddr.mPort = UDP_PORT;
+    udpSock.mHandler = udp_msg_rcv_cb;
     otUdpBind(aInst, &udpSock, &sockAddr, OT_NETIF_UNSPECIFIED);
 
     printf("Listening for incoming messages...\n");
@@ -712,7 +744,7 @@ static void listening_task(void *pvParameters)
  */
 static void sending_task(void *pvParameters)
 {
-    otInstance *aInst = (otInstance *)pvParameters;
+    otInstance *aInst = get_ot_instance();
     char message[128];
 
     while (true)
@@ -956,10 +988,9 @@ void register_thread(void)
 
     // generate a random ipv6 address
     random_ipv6_addr(aInst);
+    init_udp_sock(aInst);
 
     // init UDP for messaging system
-    otUdpSocket udpSock;
-    otSockAddr sockAddr = {.mPort = UDP_PORT};
     ESP_ERROR_CHECK(otUdpOpen(aInst, &udpSock, udp_advert_rcv_cb, NULL));
     ESP_ERROR_CHECK(otUdpBind(aInst, &udpSock, &sockAddr, OT_NETIF_THREAD));
 
