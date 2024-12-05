@@ -107,6 +107,7 @@ typedef struct {
 
 static otUdpSocket udpSock;
 static otSockAddr sockAddr;
+static otMessageInfo msgInfo;
 
 static peer_verif_session peerSessions[MAX_PEERS] = {0};
 
@@ -248,14 +249,19 @@ static void init_udp_sock(otInstance *aInst)
 {
     otIp6Address ipv6Addr = get_ipv6_address(aInst);
 
+    // default socket address info
     sockAddr.mAddress = ipv6Addr;
     sockAddr.mPort = UDP_PORT;
 
+    // default info for udp socket
     udpSock.mSockName = sockAddr;
     udpSock.mPeerName.mPort = 0;
     udpSock.mHandler = udp_advert_rcv_cb;
     udpSock.mContext = NULL;
     udpSock.mHandle = NULL;
+
+    // include the default udp port for msgInfo
+    msgInfo.mPeerPort = UDP_PORT;
 }
 
 /**
@@ -376,7 +382,6 @@ static void udp_verif_rcv_cb(void *aContext, otMessage *aMessage, const otMessag
 static void send_message(otInstance *aInst, const char *msg, otIp6Address *destAddr)
 {
     otError error;
-    otMessageInfo msgInfo;
     otMessage *udpMsg;
 
     // init
@@ -406,7 +411,6 @@ static void send_message(otInstance *aInst, const char *msg, otIp6Address *destA
 
     memset(&msgInfo, 0, sizeof(otMessageInfo));
     msgInfo.mPeerAddr = *destAddr;
-    msgInfo.mPeerPort = UDP_PORT;
 
     // send it!
     error = otUdpSend(aInst, &udpSock, udpMsg, &msgInfo);
@@ -428,7 +432,6 @@ static void send_thread_advertisement(otInstance *aInst)
 {
     otError error;
     otMessage *msg;
-    otMessageInfo msgInfo;
     char advertMsg[ADVERT_SIZE];
 
     // make the message
@@ -444,7 +447,6 @@ static void send_thread_advertisement(otInstance *aInst)
     }
 
     msgInfo.mPeerAddr = *localAddr;
-    msgInfo.mPeerPort = UDP_PORT;
 
     // make a new message
     msg = otUdpNewMessage(aInst, NULL);
@@ -756,7 +758,6 @@ static void sending_task(void *pvParameters)
 
             otMessageInfo msgInfo;
             memset(&msgInfo, 0, sizeof(msgInfo));
-            msgInfo.mPeerPort = UDP_PORT;
             otIp6AddressFromString("FF03::1", &msgInfo.mPeerAddr);
 
             otUdpSend(aInst, NULL, msg, &msgInfo);
@@ -770,16 +771,15 @@ static void sending_task(void *pvParameters)
  */
 static void start_chat(char *ipv6_addr)
 {
-    otInstance *aInst = get_ot_instance();
     messageQueue = xQueueCreate(5, sizeof(char) * 128);
 
-    xTaskCreate(handshake_task, "Handshake Task", 4096, aInst, 1, NULL);
+    xTaskCreate(handshake_task, "Handshake Task", 4096, NULL, 1, NULL);
 
     // wait for a handshake
     vTaskDelay(pdMS_TO_TICKS(5000));
 
-    xTaskCreate(listening_task, "Listening Task", 4096, aInst, 1, NULL);
-    xTaskCreate(sending_task, "Sending Task", 4096, aInst, 1, NULL);
+    xTaskCreate(listening_task, "Listening Task", 4096, NULL, 1, NULL);
+    xTaskCreate(sending_task, "Sending Task", 4096, NULL, 1, NULL);
 
     char peerAddress[40];
     strncpy(peerAddress, ipv6_addr, sizeof(peerAddress) - 1);
@@ -814,7 +814,7 @@ static otError send_message_cmd(void *aContext, uint8_t aArgsLength, char *aArgs
 {
     otInstance *aInst = get_ot_instance();
 
-    // Check if the correct number of arguments is passed
+    // check if the correct number of arguments is passed
     if (aArgsLength != 2)
     {
         printf("Usage: send_message <message> <ipv6_addr>\n");
