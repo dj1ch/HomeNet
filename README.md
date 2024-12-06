@@ -107,6 +107,10 @@ idf.py flash
 
 Here are the commands that you can use:
 
+* `set_nickname` Sets the nickname of a peer
+* `get_nickname` Gets the peer's nickname based on their IPv6 address
+* `start_chat` Starts a chat with a peer
+* `send_message` Sends a message to a peer manually
 * `send_advert` Sends a HomeNet style advertisement to any peers
 * `stop_advert` Self explanatory, stops advertisement
 * `start_scan` Looks for any peers sending advertisements
