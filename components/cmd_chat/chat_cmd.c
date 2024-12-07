@@ -51,7 +51,6 @@ static esp_err_t set_nickname(const char *ipv6_addr, const char *nickname)
         return ESP_ERR_INVALID_ARG;
     }
 
-    nvs_handle_t handle;
     esp_err_t err = nvs_open("storage", NVS_READWRITE, &handle);
     if (err == ESP_OK) {
         err = nvs_set_str(handle, ipv6_addr, nickname);
@@ -73,7 +72,6 @@ static esp_err_t get_nickname(const char *ipv6_addr, char *nickname, size_t len)
         return ESP_ERR_INVALID_ARG;
     }
 
-    nvs_handle_t handle;
     esp_err_t err = nvs_open("storage", NVS_READONLY, &handle);
     if (err == ESP_OK)
     {
@@ -120,7 +118,6 @@ static esp_err_t get_ipv6(const char *nickname, char *ipv6_addr, size_t len)
     {
         return ESP_ERR_INVALID_ARG;
     }
-    nvs_handle_t handle;
     esp_err_t err = nvs_open("storage", NVS_READONLY, &handle);
     if (err != ESP_OK)
     {
