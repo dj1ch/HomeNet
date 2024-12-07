@@ -78,3 +78,6 @@
         .netif_queue_size = 10,                 \
         .task_queue_size = 10,                  \
     }
+
+// does absolutely nothing because esp-idf won't shut up
+#define test 0
