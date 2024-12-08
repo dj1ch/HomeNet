@@ -17,16 +17,34 @@
 #include "driver/gpio.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include "esp_system.h"
+#include "esp_mac.h"
 
 static esp_err_t turn_on_led(void);
 static esp_err_t turn_off_led(void);
+
+uint32_t LED_PIN = 7;
+bool init = false;
 
 /**
  * Make sure LED pin is set as an output pin
  */
 esp_err_t init_led(void)
 {
-    esp_err_t err = gpio_set_direction(7, GPIO_MODE_OUTPUT);
+    // reset pin
+    esp_err_t err = gpio_reset_pin(LED_PIN);
+    if (err != ESP_OK)
+    {
+        return err;
+    }
+
+    err = gpio_set_direction(LED_PIN, GPIO_MODE_OUTPUT);
+
+    if (err == ESP_OK)
+    {
+        init = true;
+    }
+
     return err;
 }
 
@@ -35,8 +53,14 @@ esp_err_t init_led(void)
  */
 static esp_err_t turn_on_led(void)
 {
+    // double check
+    if (!init)
+    {
+        init_led();
+    }
+
     // 1 is high
-    esp_err_t err = gpio_set_level(7, 1);
+    esp_err_t err = gpio_set_level(LED_PIN, 1);
     vTaskDelay(pdMS_TO_TICKS(500));
 
     return err;
@@ -47,8 +71,14 @@ static esp_err_t turn_on_led(void)
  */
 static esp_err_t turn_off_led(void)
 {
+    // double check
+    if (!init)
+    {
+        init_led();
+    }
+
     // 0 is low
-    esp_err_t err = gpio_set_level(7, 0);
+    esp_err_t err = gpio_set_level(LED_PIN, 0);
     vTaskDelay(pdMS_TO_TICKS(500));
 
     return err;
