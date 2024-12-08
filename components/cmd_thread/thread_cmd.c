@@ -264,10 +264,6 @@ static void init_udp_sock(otInstance *aInstance)
 
     // include the default udp port for aMessageInfo
     aMessageInfo.mPeerPort = UDP_PORT;
-
-    // set in memory
-    memset(&aSockName, 0, sizeof(aSockName));
-    memset(&aSocket, 0, sizeof(aSocket));
 }
 
 /**
@@ -391,7 +387,6 @@ static void send_message(otInstance *aInstance, const char *aMessage, otIp6Addre
     otMessage *oMessage;
 
     // init
-    memset(&aSocket, 0, sizeof(aSocket));
     err = otUdpOpen(aInstance, &aSocket, udp_msg_rcv_cb, NULL);
     if (err != OT_ERROR_NONE)
     {
@@ -676,7 +671,6 @@ static void handshake_task(void *pvParameters)
     }
 
     // open socket and set the receive callback
-    memset(&aSocket, 0, sizeof(aSocket));
     otUdpOpen(aInstance, &aSocket, udp_verif_rcv_cb, NULL);
 
     memset(&aMessageInfo, 0, sizeof(aMessageInfo));
@@ -728,7 +722,6 @@ static void listening_task(void *pvParameters)
     otInstance *aInstance = get_ot_instance();
 
     aSocket.mHandler = udp_msg_rcv_cb;
-    memset(&aSocket, 0, sizeof(aSocket));
     otUdpOpen(aInstance, &aSocket, udp_msg_rcv_cb, NULL);
     otUdpBind(aInstance, &aSocket, &aSockName, OT_NETIF_UNSPECIFIED);
 
@@ -990,7 +983,6 @@ void register_thread(void)
 
     // init UDP for messaging system
     aSocket.mHandler = udp_advert_rcv_cb;
-    memset(&aSocket, 0, sizeof(aSocket));
     ESP_ERROR_CHECK(otUdpOpen(aInstance, &aSocket, udp_advert_rcv_cb, NULL));
     ESP_ERROR_CHECK(otUdpBind(aInstance, &aSocket, &aSockName, OT_NETIF_THREAD));
 
