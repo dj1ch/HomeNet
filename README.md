@@ -115,6 +115,8 @@ Here are the commands that you can use:
 * `stop_advert` Self explanatory, stops advertisement
 * `start_scan` Looks for any peers sending advertisements
 * `send_verfication` Sends verification code to peer to establish a connection
+* `turn_on_led` Turns on the onboard LED (must be configured)
+* `turn_off_led` Turns off the onboard LED (must be configured)
 
 <!-- ROADMAP -->
 ## Roadmap
