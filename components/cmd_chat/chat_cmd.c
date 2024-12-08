@@ -41,19 +41,27 @@
 #include "nvs.h"
 
 /**
- * Set the nickname of a discovered client
- * in the format ("ipv6_addr", "nickname")
+ * Function declarations
  */
-static esp_err_t set_nickname(const char *ipv6_addr, const char *nickname)
+static esp_err_t set_nickname(const char *peerAddr, const char *nickname);
+static esp_err_t get_nickname(const char *peerAddr, char *nickname, size_t len);
+static esp_err_t iterate_nvs_keys(const char *nickname, char *peerAddr, size_t len);
+static esp_err_t get_ipv6(const char *nickname, char *peerAddr, size_t len);
+
+/**
+ * Set the nickname of a discovered client
+ * in the format ("peerAddr", "nickname")
+ */
+static esp_err_t set_nickname(const char *peerAddr, const char *nickname)
 {
-    if (!ipv6_addr || !nickname)
+    if (!peerAddr || !nickname)
     {
         return ESP_ERR_INVALID_ARG;
     }
 
     esp_err_t err = nvs_open("storage", NVS_READWRITE, &handle);
     if (err == ESP_OK) {
-        err = nvs_set_str(handle, ipv6_addr, nickname);
+        err = nvs_set_str(handle, peerAddr, nickname);
         if (err == ESP_OK) {
             err = nvs_commit(handle);
         }
@@ -65,9 +73,9 @@ static esp_err_t set_nickname(const char *ipv6_addr, const char *nickname)
 /**
  * Get the requested nickname(s) from NVS
  */
-static esp_err_t get_nickname(const char *ipv6_addr, char *nickname, size_t len)
+static esp_err_t get_nickname(const char *peerAddr, char *nickname, size_t len)
 {
-    if (!ipv6_addr || !nickname || len == 0)
+    if (!peerAddr || !nickname || len == 0)
     {
         return ESP_ERR_INVALID_ARG;
     }
@@ -75,7 +83,7 @@ static esp_err_t get_nickname(const char *ipv6_addr, char *nickname, size_t len)
     esp_err_t err = nvs_open("storage", NVS_READONLY, &handle);
     if (err == ESP_OK)
     {
-        err = nvs_get_str(handle, ipv6_addr, nickname, &len);
+        err = nvs_get_str(handle, peerAddr, nickname, &len);
         nvs_close(handle);
     }
     return err;
@@ -86,7 +94,7 @@ static esp_err_t get_nickname(const char *ipv6_addr, char *nickname, size_t len)
  * Keep in mind the nickname and NVS are stored using a method
  * which has the address set as the key, then the value set as the nickname
  */
-static esp_err_t iterate_nvs_keys(nvs_handle_t handle, const char *nickname, char *ipv6_addr, size_t len)
+static esp_err_t iterate_nvs_keys(const char *nickname, char *peerAddr, size_t len)
 {
     nvs_iterator_t it;
     esp_err_t err = nvs_entry_find(NVS_DEFAULT_PART_NAME, "storage", NVS_TYPE_STR, &it);
@@ -98,7 +106,7 @@ static esp_err_t iterate_nvs_keys(nvs_handle_t handle, const char *nickname, cha
         nvs_entry_info(it, &info);
         if (strcmp(info.key, nickname) == 0)
         {
-            err = nvs_get_str(handle, info.key, ipv6_addr, &len);
+            err = nvs_get_str(handle, info.key, peerAddr, &len);
             nvs_release_iterator(it);
             return err;
         }
@@ -112,9 +120,9 @@ static esp_err_t iterate_nvs_keys(nvs_handle_t handle, const char *nickname, cha
 /**
  * Finds the ipv6 address through a nickname
  */
-static esp_err_t get_ipv6(const char *nickname, char *ipv6_addr, size_t len)
+static esp_err_t get_ipv6(const char *nickname, char *peerAddr, size_t len)
 {
-    if (!nickname || !ipv6_addr || len == 0)
+    if (!nickname || !peerAddr || len == 0)
     {
         return ESP_ERR_INVALID_ARG;
     }
@@ -123,7 +131,7 @@ static esp_err_t get_ipv6(const char *nickname, char *ipv6_addr, size_t len)
     {
         return err;
     }
-    esp_err_t result = iterate_nvs_keys(handle, nickname, ipv6_addr, len);
+    esp_err_t result = iterate_nvs_keys(nickname, peerAddr, len);
     nvs_close(handle);
     return result;
 }
@@ -135,22 +143,22 @@ otError set_nickname_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
 {
     if (aArgsLength != 3)
     {
-        printf("Usage: set_nickname <ipv6_addr> <nickname>\n");
+        printf("Usage: set_nickname <peer_address> <nickname>\n");
         return OT_ERROR_FAILED;
     }
 
-    const char *ipv6_addr = aArgs[1];
+    const char *peerAddr = aArgs[1];
     const char *nickname = aArgs[2];
-    esp_err_t err = set_nickname(ipv6_addr, nickname);
+    esp_err_t err = set_nickname(peerAddr, nickname);
 
     if (err == ESP_OK)
     {
-        printf("Set nickname for %s as '%s'\n", ipv6_addr, nickname);
+        printf("Set nickname for %s as '%s'\n", peerAddr, nickname);
         return OT_ERROR_NONE;
     }
     else 
     {
-        printf("Error setting nickname '%s' for %s", nickname, ipv6_addr);
+        printf("Error setting nickname '%s' for %s", nickname, peerAddr);
         return OT_ERROR_FAILED;
     }
 }
@@ -162,25 +170,25 @@ otError get_nickname_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
 {
     if (aArgsLength != 2)
     {
-        printf("Usage: get_nickname <ipv6_addr>\n");
+        printf("Usage: get_nickname <peerAddr>\n");
         return OT_ERROR_FAILED;
     }
 
-    const char *ipv6_addr = aArgs[1];
+    const char *peerAddr = aArgs[1];
     char nickname[64];
-    esp_err_t err = get_nickname(ipv6_addr, nickname, sizeof(nickname));
+    esp_err_t err = get_nickname(peerAddr, nickname, sizeof(nickname));
 
     if (err == ESP_OK) {
-        printf("Nickname for %s: %s\n", ipv6_addr, nickname);
+        printf("Nickname for %s: %s\n", peerAddr, nickname);
         return OT_ERROR_NONE;
     } 
     else if (err == ESP_ERR_NOT_FOUND)
     {
-        printf("No nickname found for %s\n", ipv6_addr);
+        printf("No nickname found for %s\n", peerAddr);
         return OT_ERROR_FAILED;
     }
     else {
-        printf("Error retrieving nickname for %s: %s\n", ipv6_addr, esp_err_to_name(err));
+        printf("Error retrieving nickname for %s: %s\n", peerAddr, esp_err_to_name(err));
         return OT_ERROR_FAILED;
     }
 }
@@ -197,11 +205,11 @@ otError get_ipv6_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
     }
 
     const char *nickname = aArgs[1];
-    char ipv6_addr[64];
-    esp_err_t err = get_ipv6(nickname, ipv6_addr, sizeof(ipv6_addr));
+    char peerAddr[64];
+    esp_err_t err = get_ipv6(nickname, peerAddr, sizeof(peerAddr));
 
     if (err == ESP_OK) {
-        printf("IPv6 address for nickname '%s': %s\n", nickname, ipv6_addr);
+        printf("IPv6 address for nickname '%s': %s\n", nickname, peerAddr);
         return OT_ERROR_NONE;
     }
     else if (err == ESP_ERR_NOT_FOUND)

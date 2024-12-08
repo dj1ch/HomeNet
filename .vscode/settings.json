@@ -37,7 +37,14 @@
         "esp_openthread_cli.h": "c",
         "cstddef": "c",
         "functional": "c",
-        "argtable3.h": "c"
+        "argtable3.h": "c",
+        "cstdint": "cpp",
+        "led_cmd.h": "c",
+        "cli.h": "c",
+        "error.h": "c",
+        "esp_err.h": "c",
+        "gpio.h": "c",
+        "gpio_etm.h": "c"
     },
     "idf.espIdfPathWin": "c:\\Espressif\\containers\\v5.3\\esp-idf",
     "idf.pythonBinPathWin": "c:\\Espressif\\tools\\python_env\\idf5.3_py3.11_env\\Scripts\\python.exe",

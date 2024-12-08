@@ -17,6 +17,7 @@
 
 #include "thread_cmd.h"
 #include "chat_cmd.h"
+#include "led_cmd.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
@@ -51,6 +52,7 @@
 #include "esp_log.h"
 #include "nvs_flash.h"
 #include "nvs.h"
+#include "driver/gpio.h"
 
 /**
  * Special magic number
@@ -262,6 +264,10 @@ static void init_udp_sock(otInstance *aInstance)
 
     // include the default udp port for aMessageInfo
     aMessageInfo.mPeerPort = UDP_PORT;
+
+    // set in memory
+    memset(&aSockName, 0, sizeof(aSockName));
+    memset(&aSocket, 0, sizeof(aSocket));
 }
 
 /**
@@ -385,8 +391,8 @@ static void send_message(otInstance *aInstance, const char *aMessage, otIp6Addre
     otMessage *oMessage;
 
     // init
-    memset(&aSocket, 0, sizeof(otUdpSocket));
-    err = otUdpOpen(aInstance, &aSocket, NULL, NULL);
+    memset(&aSocket, 0, sizeof(aSocket));
+    err = otUdpOpen(aInstance, &aSocket, udp_msg_rcv_cb, NULL);
     if (err != OT_ERROR_NONE)
     {
         printf("Failed to open UDP socket: %s\n", otThreadErrorToString(err));
@@ -721,10 +727,9 @@ static void listening_task(void *pvParameters)
 {
     otInstance *aInstance = get_ot_instance();
 
+    aSocket.mHandler = udp_msg_rcv_cb;
     memset(&aSocket, 0, sizeof(aSocket));
     otUdpOpen(aInstance, &aSocket, udp_msg_rcv_cb, NULL);
-
-    aSocket.mHandler = udp_msg_rcv_cb;
     otUdpBind(aInstance, &aSocket, &aSockName, OT_NETIF_UNSPECIFIED);
 
     printf("Listening for incoming messages...\n");
@@ -970,6 +975,9 @@ void register_thread(void)
         return;
     }
 
+    // init onboard LED
+    ESP_ERROR_CHECK(init_led());
+
     // enable ipv6
     esp_openthread_lock_acquire(0);
     otIp6SetEnabled(aInstance, true);
@@ -981,6 +989,8 @@ void register_thread(void)
     init_udp_sock(aInstance);
 
     // init UDP for messaging system
+    aSocket.mHandler = udp_advert_rcv_cb;
+    memset(&aSocket, 0, sizeof(aSocket));
     ESP_ERROR_CHECK(otUdpOpen(aInstance, &aSocket, udp_advert_rcv_cb, NULL));
     ESP_ERROR_CHECK(otUdpBind(aInstance, &aSocket, &aSockName, OT_NETIF_THREAD));
 
@@ -1000,7 +1010,9 @@ void register_thread(void)
         {"send_advert", send_advert_cmd},
         {"stop_advert", stop_advert_cmd},
         {"start_scan", start_scan_cmd},
-        {"send_verification", send_verification_cmd}
+        {"send_verification", send_verification_cmd},
+        {"turn_on_led", turn_on_led_cmd},
+        {"turn_off_led", turn_off_led_cmd}
     };
     otCliSetUserCommands(kCommands, OT_ARRAY_LENGTH(kCommands), aInstance);
 #endif
