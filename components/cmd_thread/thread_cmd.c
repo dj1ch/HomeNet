@@ -88,7 +88,7 @@ static void send_thread_advertisement(otInstance *aInstance);
 static void start_peer_scan(otInstance *aInstance);
 static void start_verif_process(otInstance *aInstance, const otMessageInfo *aMessageInfo);
 static void advert_task(void *argc);
-static void start_advert_task(otInstance *aInstance, uint32_t it);
+static void start_advert_task(uint32_t it);
 static void stop_advert_task(void);
 static void handshake_task(void *pvParameters);
 static void listening_task(void *pvParameters);
@@ -265,6 +265,10 @@ static void init_udp_sock(otInstance *aInstance)
     // include the default udp port for aMessageInfo
     aMessageInfo.mPeerPort = UDP_PORT;
 }
+
+/**
+ * To-do: Write a function that autofills up structs with data instead of global declarations
+ */
 
 /**
  * Setup UDP for communication
@@ -623,7 +627,7 @@ static void advert_task(void *argc)
 /**
  * Starts the advertisement task
  */
-static void start_advert_task(otInstance *aInstance, uint32_t it)
+static void start_advert_task(uint32_t it)
 {
     if (advertTaskHandle != NULL)
     {
@@ -845,16 +849,19 @@ static otError stop_advert_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[
  */
 static otError send_advert_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
 {
-    otInstance *aInstance = get_ot_instance();
-
     // number of iterations (0 is forever)
     uint32_t it = 0;
 
-    if (aArgsLength == 1) {
-        it = atoi(aArgs[0]);
+    if (aArgsLength > 0) {
+        char *endPtr;
+        it = strtoul(aArgs[0], &endPtr, 10);
 
-        if (it <= 0) {
+        // debugging
+        printf("Iterations specified: %s\n", aArgs[0]);
+
+        if (*endPtr != '\0') {
             printf("Invalid argument. Iterations must be a non-negative integer!\n");
+            printf("Iterations specified: %lu\n", it);
             return OT_ERROR_FAILED;
         }
     }
@@ -862,10 +869,10 @@ static otError send_advert_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[
     // special output depending on args
     if (it == 0) {
         printf("Running advertisement indefinitely...\n");
-        start_advert_task(aInstance, it);
+        start_advert_task(it);
     } else {
-        printf("Running advertisement for %lu it...\n", (unsigned long)it);
-        start_advert_task(aInstance, it);
+        printf("Running advertisement for %lu iterations...\n", it);
+        start_advert_task(it);
     }
 
     return OT_ERROR_NONE;
