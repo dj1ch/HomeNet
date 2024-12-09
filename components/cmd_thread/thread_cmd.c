@@ -595,7 +595,7 @@ static void start_verif_process(otInstance *aInstance, const otMessageInfo *aMes
  */
 static void advert_task(void *argc)
 {
-    otInstance *aInstance = (otInstance *)argc;
+    otInstance *aInstance = get_ot_instance();
     uint32_t it = *(uint32_t *)argc;
     uint32_t cnt = 0;
 
