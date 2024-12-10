@@ -79,7 +79,10 @@ static int random_range(int min, int max);
 static int generate_verif_code(void);
 static void random_ipv6_addr(otInstance *aInstance);
 static otIp6Address get_ipv6_address(otInstance *aInstance);
-static void init_udp_sock(otInstance *aInstance);
+//static void init_udp_sock(otInstance *aInstance);
+static otUdpSocket init_ot_udp_socket(otUdpSocket aSocket, otSockAddr aSockName);
+static otSockAddr init_ot_sock_addr(otSockAddr aSockName);
+static otMessageInfo init_ot_message_info(otMessageInfo aMessageInfo);
 static void udp_advert_rcv_cb(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
 static void udp_msg_rcv_cb(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
 static void udp_verif_rcv_cb(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
@@ -107,9 +110,9 @@ typedef struct {
     bool active;     
 } peer_verif_session;
 
-static otUdpSocket aSocket;
+/*static otUdpSocket aSocket;
 static otSockAddr aSockName;
-static otMessageInfo aMessageInfo;
+static otMessageInfo aMessageInfo;*/
 
 static peer_verif_session peerSessions[MAX_PEERS] = {0};
 
@@ -247,7 +250,8 @@ static otIp6Address get_ipv6_address(otInstance *aInstance)
 /**
  * Initializes aSockName and aSocket so everything works correctly
  */
-static void init_udp_sock(otInstance *aInstance)
+
+/*static void init_udp_sock(otInstance *aInstance)
 {
     otIp6Address ipv6Addr = get_ipv6_address(aInstance);
 
@@ -264,11 +268,59 @@ static void init_udp_sock(otInstance *aInstance)
 
     // include the default udp port for aMessageInfo
     aMessageInfo.mPeerPort = UDP_PORT;
-}
+}*/
 
 /**
  * To-do: Write a function that autofills up structs with data instead of global declarations
  */
+
+/**
+ * Preferably, we call it like so...
+ * 
+ * otSockAddr aSockName;
+ * otUdpSocket aSocket;
+ * 
+ * aSockName = init_ot_sock_name(aSockName);
+ * aSocket = init_ot_udp_socket(aSocket, aSockName);
+ */
+
+/**
+ * Initializes aSocket
+ */
+static otUdpSocket init_ot_udp_socket(otUdpSocket aSocket, otSockAddr aSockName)
+{
+    aSocket.mSockName = aSockName;
+    aSocket.mPeerName.mPort = 0;
+    aSocket.mHandler = udp_advert_rcv_cb;
+    aSocket.mContext = NULL;
+    aSocket.mHandle = NULL;
+
+    return aSocket;
+}
+
+/**
+ * Initializes aSockName
+ */
+static otSockAddr init_ot_sock_addr(otSockAddr aSockName)
+{
+    otInstance *aInstance = get_ot_instance();
+
+    otIp6Address ipv6Addr = get_ipv6_address(aInstance);
+    aSockName.mAddress = ipv6Addr;
+    aSockName.mPort = UDP_PORT;
+
+    return aSockName;
+}
+
+/**
+ * Initializes aMessageInfo
+ */
+static otMessageInfo init_ot_message_info(otMessageInfo aMessageInfo)
+{
+    aMessageInfo.mPeerPort = UDP_PORT;
+
+    return aMessageInfo;
+}
 
 /**
  * Setup UDP for communication
@@ -391,6 +443,15 @@ static void send_message(otInstance *aInstance, const char *aMessage, otIp6Addre
     otMessage *oMessage;
 
     // init
+    otSockAddr aSockName;
+    otUdpSocket aSocket;
+    otMessageInfo aMessageInfo;
+
+    aSockName = init_ot_sock_addr(aSockName);
+    aSocket = init_ot_udp_socket(aSocket, aSockName);
+    aMessageInfo = init_ot_message_info(aMessageInfo);
+
+    // init
     err = otUdpOpen(aInstance, &aSocket, udp_msg_rcv_cb, NULL);
     if (err != OT_ERROR_NONE)
     {
@@ -438,6 +499,15 @@ static void send_thread_advertisement(otInstance *aInstance)
     otError err;
     otMessage *aMessage;
     char advertMsg[ADVERT_SIZE];
+
+    // init
+    otSockAddr aSockName;
+    otUdpSocket aSocket;
+    otMessageInfo aMessageInfo;
+    
+    aSockName = init_ot_sock_addr(aSockName);
+    aSocket = init_ot_udp_socket(aSocket, aSockName);
+    aMessageInfo = init_ot_message_info(aMessageInfo);
 
     // make the message
     snprintf(advertMsg, ADVERT_SIZE, "Thread device available, Magic Number: %llu", magic_num);
@@ -499,6 +569,14 @@ static void send_thread_advertisement(otInstance *aInstance)
 static void start_peer_scan(otInstance *aInstance)
 {
     otError err;
+    // init
+    otSockAddr aSockName;
+    otUdpSocket aSocket;
+    otMessageInfo aMessageInfo;
+    
+    aSockName = init_ot_sock_addr(aSockName);
+    aSocket = init_ot_udp_socket(aSocket, aSockName);
+    aMessageInfo = init_ot_message_info(aMessageInfo);
 
     // create UDP socket
     aSocket.mHandler = udp_advert_rcv_cb;
@@ -540,6 +618,13 @@ static void start_verif_process(otInstance *aInstance, const otMessageInfo *aMes
 {
     int code = generate_verif_code();
     int expected = code + 1;
+
+    // init
+    otSockAddr aSockName;
+    otUdpSocket aSocket;
+    
+    aSockName = init_ot_sock_addr(aSockName);
+    aSocket = init_ot_udp_socket(aSocket, aSockName);
 
     char aMessage[MSG_SIZE];
     snprintf(aMessage, MSG_SIZE, "Verification Code: %d", code);
@@ -665,6 +750,15 @@ static void handshake_task(void *pvParameters)
     otMessage *aMessage;
     int verif_code, rcv_code;
 
+    // init
+    otSockAddr aSockName;
+    otUdpSocket aSocket;
+    otMessageInfo aMessageInfo;
+    
+    aSockName = init_ot_sock_addr(aSockName);
+    aSocket = init_ot_udp_socket(aSocket, aSockName);
+    aMessageInfo = init_ot_message_info(aMessageInfo);
+
     // create queue for the handshakes
     handshakeQueue = xQueueCreate(1, sizeof(int));
     if (handshakeQueue == NULL)
@@ -725,6 +819,13 @@ static void listening_task(void *pvParameters)
 {
     otInstance *aInstance = get_ot_instance();
 
+    // init
+    otSockAddr aSockName;
+    otUdpSocket aSocket;
+    
+    aSockName = init_ot_sock_addr(aSockName);
+    aSocket = init_ot_udp_socket(aSocket, aSockName);
+
     aSocket.mHandler = udp_msg_rcv_cb;
     otUdpOpen(aInstance, &aSocket, udp_msg_rcv_cb, NULL);
     otUdpBind(aInstance, &aSocket, &aSockName, OT_NETIF_UNSPECIFIED);
@@ -746,6 +847,15 @@ static void sending_task(void *pvParameters)
 {
     otInstance *aInstance = get_ot_instance();
     char aMessage[128];
+
+    // init
+    otSockAddr aSockName;
+    otUdpSocket aSocket;
+    otMessageInfo aMessageInfo;
+    
+    aSockName = init_ot_sock_addr(aSockName);
+    aSocket = init_ot_udp_socket(aSocket, aSockName);
+    aMessageInfo = init_ot_message_info(aMessageInfo);
 
     while (true)
     {
@@ -897,6 +1007,10 @@ static otError send_verification_cmd(void *aContext, uint8_t aArgsLength, char *
 {
     otInstance *aInstance = get_ot_instance();
 
+    // init
+    otMessageInfo aMessageInfo;
+    aMessageInfo = init_ot_message_info(aMessageInfo);
+
     if (aArgsLength != 1)
     {
         printf("Usage: send_verification <peer_address>\n");
@@ -986,7 +1100,14 @@ void register_thread(void)
 
     // generate a random ipv6 address
     random_ipv6_addr(aInstance);
-    init_udp_sock(aInstance);
+    // init_udp_sock(aInstance);
+    otSockAddr aSockName;
+    otUdpSocket aSocket;
+    otMessageInfo aMessageInfo;
+    
+    aSockName = init_ot_sock_addr(aSockName);
+    aSocket = init_ot_udp_socket(aSocket, aSockName);
+    aMessageInfo = init_ot_message_info(aMessageInfo);
 
     // init UDP for messaging system
     aSocket.mHandler = udp_advert_rcv_cb;
