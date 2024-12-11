@@ -79,7 +79,6 @@ static int random_range(int min, int max);
 static int generate_verif_code(void);
 static void random_ipv6_addr(otInstance *aInstance);
 static otIp6Address get_ipv6_address(otInstance *aInstance);
-//static void init_udp_sock(otInstance *aInstance);
 static otUdpSocket init_ot_udp_socket(otUdpSocket aSocket, otSockAddr aSockName);
 static otSockAddr init_ot_sock_addr(otSockAddr aSockName);
 static otMessageInfo init_ot_message_info(otMessageInfo aMessageInfo);
@@ -109,10 +108,6 @@ typedef struct {
     int expected;
     bool active;     
 } peer_verif_session;
-
-/*static otUdpSocket aSocket;
-static otSockAddr aSockName;
-static otMessageInfo aMessageInfo;*/
 
 static peer_verif_session peerSessions[MAX_PEERS] = {0};
 
@@ -246,33 +241,6 @@ static otIp6Address get_ipv6_address(otInstance *aInstance)
     otIp6Address unspecifAddr = {0};
     return unspecifAddr;
 }
-
-/**
- * Initializes aSockName and aSocket so everything works correctly
- */
-
-/*static void init_udp_sock(otInstance *aInstance)
-{
-    otIp6Address ipv6Addr = get_ipv6_address(aInstance);
-
-    // default socket address info
-    aSockName.mAddress = ipv6Addr;
-    aSockName.mPort = UDP_PORT;
-
-    // default info for udp socket
-    aSocket.mSockName = aSockName;
-    aSocket.mPeerName.mPort = 0;
-    aSocket.mHandler = udp_advert_rcv_cb;
-    aSocket.mContext = NULL;
-    aSocket.mHandle = NULL;
-
-    // include the default udp port for aMessageInfo
-    aMessageInfo.mPeerPort = UDP_PORT;
-}*/
-
-/**
- * To-do: Write a function that autofills up structs with data instead of global declarations
- */
 
 /**
  * Preferably, we call it like so...
