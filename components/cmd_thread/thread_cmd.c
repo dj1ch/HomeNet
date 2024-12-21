@@ -525,13 +525,17 @@ static void send_message(otInstance *aInstance, const char *aBuf, otIp6Address *
     otMessage *aMessage;
 
     // init
-    otSockAddr aSockName;
-    otUdpSocket aSocket;
-    otMessageInfo aMessageInfo;
+    otSockAddr aSockName = init_ot_sock_addr((otSockAddr){0});
+    otUdpSocket aSocket = init_ot_udp_socket((otUdpSocket){0}, aSockName);
+    otMessageInfo aMessageInfo = init_ot_message_info((otMessageInfo){0}, aSocket);
 
-    aSockName = init_ot_sock_addr(aSockName);
-    aSocket = init_ot_udp_socket(aSocket, aSockName);
-    aMessageInfo = init_ot_message_info(aMessageInfo, aSocket);
+    otSockAddr aSockNamePtr;
+    otUdpSocket aSocketPtr;
+    otMessageInfo aMessageInfoPtr;
+
+    ot_sock_addr_to_ptr(aSockName, &aSockNamePtr);
+    ot_udp_socket_to_ptr(aSocket, &aSocketPtr);
+    ot_message_info_to_ptr(aMessageInfo, &aMessageInfoPtr);
 
     // create new message
     aMessage = otUdpNewMessage(aInstance, NULL);
@@ -549,16 +553,8 @@ static void send_message(otInstance *aInstance, const char *aBuf, otIp6Address *
         return;
     }
 
-    memset(&aMessageInfo, 0, sizeof(otMessageInfo));
-    aMessageInfo.mPeerAddr = *destAddr;
-
-    // send it!
-    err = otUdpSend(aInstance, &aSocket, aMessage, &aMessageInfo);
-    if (err != OT_ERROR_NONE)
-    {
-        printf("Failed to send UDP message: %s\n", otThreadErrorToString(err));
-        otMessageFree(aMessage);
-    }
+    udp_create_socket(&aSocket, aInstance, &aSockName);
+    send_udp(aInstance, UDP_PORT, UDP_PORT, &aSocket, aMessage, &aMessageInfo);
 
     // close the socket
     otUdpClose(aInstance, &aSocket);
