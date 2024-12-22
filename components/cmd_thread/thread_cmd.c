@@ -96,11 +96,14 @@ static otIp6Address get_ipv6_address();
 static otUdpSocket init_ot_udp_socket(otUdpSocket aSocket, otSockAddr aSockName);
 static otSockAddr init_ot_sock_addr(otSockAddr aSockName);
 static otMessageInfo init_ot_message_info(otMessageInfo aMessageInfo, otUdpSocket aSocket);
+static otUdpSocket *ot_udp_socket_to_ptr(otUdpSocket aSocket, otUdpSocket *aSocketPtr);
+static otSockAddr *ot_sock_addr_to_ptr(otSockAddr aSockName, otSockAddr *aSockNamePtr);
+static otMessageInfo *ot_message_info_to_ptr(otMessageInfo aMessageInfo, otMessageInfo *aMessageInfoPtr);
+static otMessageInfo *const_ptr_ot_message_info_to_ptr(const otMessageInfo *aMessageInfo, otMessageInfo *aMessageInfoPtr);
 static void udp_advert_rcv_cb(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
 static void udp_msg_rcv_cb(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
 static void udp_verif_rcv_cb(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
 static void udp_create_socket(otUdpSocket *aSocket, otInstance *aInstance, otSockAddr *aSockName);
-static uint32_t udp_attach_payload(otMessage *aMessage);
 static void send_udp(otInstance *aInstance, uint16_t port, uint16_t destPort, otUdpSocket *aSocket, otMessage *aMessage, otMessageInfo *aMessageInfo);
 static void send_message(otInstance *aInstance, const char *aBuf, otIp6Address *destAddr);
 static void send_thread_advertisement();
@@ -257,8 +260,6 @@ static void random_ipv6_addr(otInstance *aInstance)
  */
 static otIp6Address get_ipv6_address()
 {
-    otInstance *aInstance = get_ot_instance();
-
     // get local eid instead
     const otIp6Address *addr = {0};
 
@@ -297,22 +298,11 @@ static otUdpSocket init_ot_udp_socket(otUdpSocket aSocket, otSockAddr aSockName)
 
     aSocket.mSockName = aSockName;
     aSocket.mPeerName.mPort = 0;
-    aSocket.mHandler = udp_advert_rcv_cb;
+    aSocket.mHandler = NULL;
     aSocket.mContext = NULL;
     aSocket.mHandle = NULL;
 
     return aSocket;
-}
-
-static otUdpSocket *ot_udp_socket_to_ptr(otUdpSocket aSocket, otUdpSocket *aSocketPtr)
-{
-    aSocketPtr->mSockName = aSocket.mSockName;
-    aSocketPtr->mPeerName.mPort = aSocket.mPeerName.mPort;
-    aSocketPtr->mHandler = aSocket.mHandler;
-    aSocketPtr->mContext = aSocket.mContext;
-    aSocketPtr->mHandle = aSocket.mHandle;
-
-    return aSocketPtr;
 }
 
 /**
@@ -328,14 +318,6 @@ static otSockAddr init_ot_sock_addr(otSockAddr aSockName)
     aSockName.mPort = UDP_PORT;
 
     return aSockName;
-}
-
-static otSockAddr *ot_sock_addr_to_ptr(otSockAddr aSockName, otSockAddr *aSockNamePtr)
-{
-    aSockNamePtr->mAddress = aSockName.mAddress;
-    aSockNamePtr->mPort = aSockName.mPort;
-
-    return aSockNamePtr;
 }
 
 /**
@@ -356,6 +338,25 @@ static otMessageInfo init_ot_message_info(otMessageInfo aMessageInfo, otUdpSocke
     return aMessageInfo;
 }
 
+static otUdpSocket *ot_udp_socket_to_ptr(otUdpSocket aSocket, otUdpSocket *aSocketPtr)
+{
+    aSocketPtr->mSockName = aSocket.mSockName;
+    aSocketPtr->mPeerName.mPort = aSocket.mPeerName.mPort;
+    aSocketPtr->mHandler = aSocket.mHandler;
+    aSocketPtr->mContext = aSocket.mContext;
+    aSocketPtr->mHandle = aSocket.mHandle;
+
+    return aSocketPtr;
+}
+
+static otSockAddr *ot_sock_addr_to_ptr(otSockAddr aSockName, otSockAddr *aSockNamePtr)
+{
+    aSockNamePtr->mAddress = aSockName.mAddress;
+    aSockNamePtr->mPort = aSockName.mPort;
+
+    return aSockNamePtr;
+}
+
 static otMessageInfo *ot_message_info_to_ptr(otMessageInfo aMessageInfo, otMessageInfo *aMessageInfoPtr)
 {
     aMessageInfoPtr->mSockAddr = aMessageInfo.mSockAddr;
@@ -368,21 +369,31 @@ static otMessageInfo *ot_message_info_to_ptr(otMessageInfo aMessageInfo, otMessa
     return aMessageInfoPtr;
 }
 
+static otMessageInfo *const_ptr_ot_message_info_to_ptr(const otMessageInfo *aMessageInfo, otMessageInfo *aMessageInfoPtr)
+{
+    aMessageInfoPtr->mSockAddr = aMessageInfo->mSockAddr;
+    aMessageInfoPtr->mSockPort = aMessageInfo->mSockPort;
+    aMessageInfoPtr->mPeerAddr = aMessageInfo->mPeerAddr;
+    aMessageInfoPtr->mPeerPort = aMessageInfo->mPeerPort;
+    aMessageInfoPtr->mHopLimit = aMessageInfo->mHopLimit;
+    aMessageInfoPtr->mAllowZeroHopLimit = aMessageInfo->mAllowZeroHopLimit;
+
+    return aMessageInfoPtr;
+}
+
 /**
  * Setup UDP for communication
  * and recieve messages in a callback
- */
-static void udp_advert_rcv_cb(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
+ */static void udp_advert_rcv_cb(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
 {
     char buf[MSG_SIZE];
-    uint16_t len;
     otInstance *aInstance = get_ot_instance();
+    uint16_t len = otMessageGetLength(aMessage);
 
-    len = otMessageGetLength(aMessage);
-    if (len > MSG_SIZE)
+    if (len >= MSG_SIZE)
     {
-        printf("Message too long!\n");
-        return;
+        printf("Message too long, truncating!\n");
+        len = MSG_SIZE - 1;
     }
 
     // copy into buffer
@@ -404,19 +415,20 @@ static void udp_advert_rcv_cb(void *aContext, otMessage *aMessage, const otMessa
             }
             else
             {
-                printf("Received advertisement with an invalid magic number: %lu\n", (unsigned long)magicNumber);
+                printf("Invalid magic number: %lu\n", (unsigned long)magicNumber);
             }
         }
         else
         {
-            printf("Failed to extract magic number!\n");
+            printf("Failed to parse magic number!\n");
         }
     }
     else
     {
-        printf("Received message does not match expected format!\n");
+        printf("Invalid message format: %s\n", buf);
     }
 }
+
 
 /**
  * UDP message recieving callback
@@ -487,24 +499,9 @@ static void udp_create_socket(otUdpSocket *aSocket, otInstance *aInstance, otSoc
     return;
 }
 
-static uint32_t udp_attach_payload(otMessage *aMessage)
-{
-    static uint32_t count = 0;
-
-    char payload[MSG_SIZE];
-    EmptyMemory(payload, MSG_SIZE);
-    count += 1;
-
-    otError error = otMessageAppend(aMessage, payload, MSG_SIZE);
-    handle_message_error(aMessage, error);
-
-    return count - 1;
-}
 
 static void send_udp(otInstance *aInstance, uint16_t port, uint16_t destPort, otUdpSocket *aSocket, otMessage *aMessage, otMessageInfo *aMessageInfo)
 {
-    int count = udp_attach_payload(aMessage);
-
     otError error = otUdpSend(aInstance, aSocket, aMessage, aMessageInfo);
     handle_message_error(aMessage, error);
     if (error == OT_ERROR_NONE)
@@ -599,7 +596,7 @@ static void send_thread_advertisement()
     }
 
     // append the message
-    err = otMessageAppend(aMessage, &magic_num, sizeof(magic_num));
+    err = otMessageAppend(aMessage, &advertMsg, sizeof(advertMsg));
     if (err != OT_ERROR_NONE)
     {
         printf("Failed to append data to message: %s\n", otThreadErrorToString(err));
@@ -620,29 +617,44 @@ static void send_thread_advertisement()
 static void start_peer_scan(otInstance *aInstance)
 {
     otError err;
+
     // init
-    otSockAddr aSockName;
-    otUdpSocket aSocket;
-    otMessageInfo aMessageInfo;
-    
-    aSockName = init_ot_sock_addr(aSockName);
-    aSocket = init_ot_udp_socket(aSocket, aSockName);
-    aMessageInfo = init_ot_message_info(aMessageInfo, aSocket);
+    otSockAddr aSockName = init_ot_sock_addr((otSockAddr){0});
+    otUdpSocket aSocket = init_ot_udp_socket((otUdpSocket){0}, aSockName);
+    otMessageInfo aMessageInfo = init_ot_message_info((otMessageInfo){0}, aSocket);
+
+    otSockAddr aSockNamePtr;
+    otUdpSocket aSocketPtr;
+    otMessageInfo aMessageInfoPtr;
+
+    ot_sock_addr_to_ptr(aSockName, &aSockNamePtr);
+    ot_udp_socket_to_ptr(aSocket, &aSocketPtr);
+    ot_message_info_to_ptr(aMessageInfo, &aMessageInfoPtr);
 
     // create UDP socket
-    aSocket.mHandler = udp_advert_rcv_cb;
-    err = otUdpOpen(aInstance, &aSocket, udp_advert_rcv_cb, NULL);
+    otIp6AddressFromString("ff03::1", &aSockName.mAddress);
+    aSocketPtr.mHandler = udp_advert_rcv_cb;
+
+    /**
+     * Used example:
+     * 
+     * https://github.com/openthread/ot-efr32/blob/6fcb36d3021bc95e5fb35eaf478f647ec099f797/examples/sleepy-demo/sleepy-mtd.c#L271
+     */
+
+    err = otUdpOpen(aInstance, &aSocketPtr, udp_advert_rcv_cb, NULL);
     if (err != OT_ERROR_NONE)
     {
         printf("Failed to open UDP socket!\n");
+        otCliOutputFormat("Error: %d, %s\r\n", err, otThreadErrorToString(err));
         return;
     }
 
     // bind socket to port
-    err = otUdpBind(aInstance, &aSocket, &aSockName, OT_NETIF_THREAD);
+    err = otUdpBind(aInstance, &aSocketPtr, &aSockNamePtr, OT_NETIF_THREAD);
     if (err != OT_ERROR_NONE)
     {
         printf("Failed to bind UDP socket!\n");
+        otCliOutputFormat("Error: %d, %s\r\n", err, otThreadErrorToString(err));
         return;
     }
 
@@ -671,11 +683,17 @@ static void start_verif_process(otInstance *aInstance, const otMessageInfo *aMes
     int expected = code + 1;
 
     // init
-    otSockAddr aSockName;
-    otUdpSocket aSocket;
+    otSockAddr aSockName = init_ot_sock_addr((otSockAddr){0});
+    otUdpSocket aSocket = init_ot_udp_socket((otUdpSocket){0}, aSockName);
     
-    aSockName = init_ot_sock_addr(aSockName);
-    aSocket = init_ot_udp_socket(aSocket, aSockName);
+
+    otSockAddr aSockNamePtr;
+    otUdpSocket aSocketPtr;
+    otMessageInfo aMessageInfoPtr;
+
+    ot_sock_addr_to_ptr(aSockName, &aSockNamePtr);
+    ot_udp_socket_to_ptr(aSocket, &aSocketPtr);
+    const_ptr_ot_message_info_to_ptr(aMessageInfo, &aMessageInfoPtr);
 
     char aBuf[MSG_SIZE];
     snprintf(aBuf, MSG_SIZE, "Verification Code: %d", code);
@@ -687,7 +705,8 @@ static void start_verif_process(otInstance *aInstance, const otMessageInfo *aMes
     }
     otMessageAppend(aMessage, aBuf, strlen(aBuf));
 
-    otUdpSend(aInstance, &aSocket, aMessage, aMessageInfo);
+    udp_create_socket(&aSocket, aInstance, &aSockName);
+    send_udp(aInstance, UDP_PORT, UDP_PORT, &aSocket, aMessage, &aMessageInfoPtr);
 
     printf("Sent verification code to peer: %d\n", code);
 
@@ -756,7 +775,10 @@ static void advert_task(void *argc)
     }
 
     printf("Advertisement task stopped.\n");
-    vTaskDelete(NULL); // delete task when done
+    
+    // delete task when done
+    advertTaskHandle = NULL;
+    vTaskDelete(NULL);
 }
 
 /**
@@ -771,10 +793,28 @@ static void start_advert_task(uint32_t it)
     }
 
     stopAdvertTask = false;
-    // starts the task
-    xTaskCreate(advert_task, "Advertisement", 4096, (void *)&it, 5, &advertTaskHandle);
+
+    // allocate memory for iterations
+    uint32_t *arg = malloc(sizeof(uint32_t));
+    if (arg == NULL)
+    {
+        printf("Failed to allocate memory for task argument.\n");
+        return;
+    }
+
+    *arg = it;
+
+    // start task
+    if (xTaskCreate(advert_task, "Advertisement", 4096, (void *)arg, 5, &advertTaskHandle) != pdPASS)
+    {
+        printf("Failed to start advertisement task.\n");
+        free(arg); // free my bro arg he aint do nun wrong
+        return;
+    }
+
     printf("Advertisement task started.\n");
 }
+
 
 /**
  * Stops the advertisement task
@@ -788,9 +828,16 @@ static void stop_advert_task(void)
     }
 
     stopAdvertTask = true;
-    vTaskDelete(advertTaskHandle);
-    printf("Signaled advertisement task to stop.\n");
+
+    // wait for a while
+    while (advertTaskHandle != NULL)
+    {
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+
+    printf("Advertisement task stopped.\n");
 }
+
 
 /**
  * Gets the handshake and establishes a connection
@@ -1056,12 +1103,17 @@ static otError send_verification_cmd(void *aContext, uint8_t aArgsLength, char *
     otInstance *aInstance = get_ot_instance();
 
     // init
-    otMessageInfo aMessageInfo;
-    otUdpSocket aSocket;
-    otSockAddr aSockName;
-    aSockName = init_ot_sock_addr(aSockName);
-    aSocket = init_ot_udp_socket(aSocket, aSockName);
-    aMessageInfo = init_ot_message_info(aMessageInfo, aSocket);
+    otSockAddr aSockName = init_ot_sock_addr((otSockAddr){0});
+    otUdpSocket aSocket = init_ot_udp_socket((otUdpSocket){0}, aSockName);
+    otMessageInfo aMessageInfo = init_ot_message_info((otMessageInfo){0}, aSocket);
+
+    otSockAddr aSockNamePtr;
+    otUdpSocket aSocketPtr;
+    otMessageInfo aMessageInfoPtr;
+
+    ot_sock_addr_to_ptr(aSockName, &aSockNamePtr);
+    ot_udp_socket_to_ptr(aSocket, &aSocketPtr);
+    ot_message_info_to_ptr(aMessageInfo, &aMessageInfoPtr);
 
     if (aArgsLength != 1)
     {
@@ -1162,8 +1214,7 @@ void register_thread(void)
     aMessageInfo = init_ot_message_info(aMessageInfo, aSocket);
 
     // init UDP for messaging system
-    aSocket.mHandler = udp_advert_rcv_cb;
-    ESP_ERROR_CHECK(otUdpOpen(aInstance, &aSocket, udp_advert_rcv_cb, NULL));
+    ESP_ERROR_CHECK(otUdpOpen(aInstance, &aSocket, NULL, NULL));
     ESP_ERROR_CHECK(otUdpBind(aInstance, &aSocket, &aSockName, OT_NETIF_THREAD));
 
 #if CONFIG_OPENTHREAD_CLI_ESP_EXTENSION
