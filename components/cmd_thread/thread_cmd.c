@@ -1150,7 +1150,7 @@ static otError start_chat_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]
 
 
 /**
- * Creates an instance of thread and joins the network
+ * Creates an instance of thread and joins or forms the network dynamically
  */
 void register_thread(void)
 {
@@ -1204,7 +1204,7 @@ void register_thread(void)
 
     // generate a random ipv6 address
     random_ipv6_addr(aInstance);
-    // init_udp_sock(aInstance);
+
     otSockAddr aSockName;
     otUdpSocket aSocket;
     otMessageInfo aMessageInfo;
@@ -1239,11 +1239,24 @@ void register_thread(void)
     };
     otCliSetUserCommands(kCommands, OT_ARRAY_LENGTH(kCommands), aInstance);
 #endif
+
+    // auto-start thread
 #if CONFIG_OPENTHREAD_AUTO_START
     otOperationalDatasetTlvs dataset;
     otError err = otDatasetGetActiveTlvs(esp_openthread_get_instance(), &dataset);
-    ESP_ERROR_CHECK(esp_openthread_auto_start((err == OT_ERROR_NONE) ? &dataset : NULL));
+    if (err == OT_ERROR_NONE) {
+        ESP_ERROR_CHECK(esp_openthread_auto_start(&dataset));
+    } else {
+        otThreadStart(aInstance);
+    }
 #endif
+
+    /**
+     * initiates device role; if this device is the leader, it starts the network
+     * otherwise, it joins the existing network dynamically.
+    */
+    otThreadSetEnabled(aInstance, true);
+
     esp_openthread_launch_mainloop();
 
     // cleanup after mainloop stops
