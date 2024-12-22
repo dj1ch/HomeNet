@@ -1257,6 +1257,24 @@ void register_thread(void)
     */
     otThreadSetEnabled(aInstance, true);
 
+    // check role
+    otDeviceRole role = otThreadGetDeviceRole(aInstance);
+    if (role == OT_DEVICE_ROLE_LEADER) {
+        ESP_LOGI(TAG, "This device is the leader.");
+    } else if (role == OT_DEVICE_ROLE_ROUTER || role == OT_DEVICE_ROLE_CHILD) {
+        ESP_LOGI(TAG, "This device is not the leader.");
+    }
+
+    // only one leader exists
+    while (role == OT_DEVICE_ROLE_LEADER) {
+        ESP_LOGI(TAG, "Leader detected, waiting for reelection.");
+
+        otThreadSetEnabled(aInstance, false);
+        ESP_LOGI(TAG, "Leader stepping down.");
+        
+        role = otThreadGetDeviceRole(aInstance);
+    }
+
     esp_openthread_launch_mainloop();
 
     // cleanup after mainloop stops
