@@ -64,7 +64,7 @@ uint64_t magic_num = 0x48616E616B6F;
  */
 #define MSG_SIZE 128
 #define ADVERT_SIZE 64
-#define ADVERT_MSG_FORMAT "Thread device available, Magic Number: "
+#define ADVERT_MSG_FORMAT "Thread device available, Magic Number: 0x48616E616B6F"
 #define TIMEOUT_MS 10000
 #define UDP_PORT 1602
 #define VERIF_PORT 1602
@@ -112,6 +112,7 @@ static void send_thread_advertisement(void);
 static void start_peer_scan(otInstance *aInstance);
 static void start_verif_process(otInstance *aInstance, const otMessageInfo *aMessageInfo);
 static void configure_network(void);
+static void configure_joiner(void);
 static void advert_task(void *argc);
 static void start_advert_task(uint32_t it);
 static void stop_advert_task(void);
@@ -125,6 +126,7 @@ static otError start_scan_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]
 static otError send_verification_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]);
 static otError start_chat_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]);
 static otError configure_network_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]);
+static otError configure_joiner_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]);
 void register_thread(void);
 
 typedef struct {
@@ -364,7 +366,8 @@ static otMessageInfo *const_ptr_ot_message_info_to_ptr(const otMessageInfo *aMes
 /**
  * Setup UDP for communication
  * and recieve messages in a callback
- */static void udp_advert_rcv_cb(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
+ */
+static void udp_advert_rcv_cb(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
 {
     char buf[MSG_SIZE];
     otInstance *aInstance = esp_openthread_get_instance();
@@ -750,35 +753,16 @@ static void configure_network(void)
     dataset.mActiveTimestamp = timestamp;
     dataset.mComponents.mIsActiveTimestampPresent = true;
 
-    dataset.mPanId = 0x1234;
+    dataset.mPanId = 0x1707;
     dataset.mComponents.mIsPanIdPresent = true;
 
-    dataset.mExtendedPanId.m8[0] = 0x48;
-    dataset.mExtendedPanId.m8[1] = 0x41;
-    dataset.mExtendedPanId.m8[2] = 0x4E;
-    dataset.mExtendedPanId.m8[3] = 0x41;
-    dataset.mExtendedPanId.m8[4] = 0x4B;
-    dataset.mExtendedPanId.m8[5] = 0x4F;
-    dataset.mExtendedPanId.m8[6] = 0x48;
-    dataset.mExtendedPanId.m8[7] = 0x4F;
+    uint8_t extPanId[8] = {0x48, 0x41, 0x4E, 0x41, 0x4B, 0x4F, 0x48, 0x4F};
+    memcpy(dataset.mExtendedPanId.m8, extPanId, sizeof(extPanId));
     dataset.mComponents.mIsExtendedPanIdPresent = true;
 
-    dataset.mNetworkKey.m8[0] = 0x48;
-    dataset.mNetworkKey.m8[1] = 0x41;
-    dataset.mNetworkKey.m8[2] = 0x4E;
-    dataset.mNetworkKey.m8[3] = 0x41;
-    dataset.mNetworkKey.m8[4] = 0x00;
-    dataset.mNetworkKey.m8[5] = 0x43;
-    dataset.mNetworkKey.m8[6] = 0x48;
-    dataset.mNetworkKey.m8[7] = 0x41;
-    dataset.mNetworkKey.m8[8] = 0x4E;
-    dataset.mNetworkKey.m8[9] = 0x00;
-    dataset.mNetworkKey.m8[10] = 0x48;
-    dataset.mNetworkKey.m8[11] = 0x4F;
-    dataset.mNetworkKey.m8[12] = 0x4B;
-    dataset.mNetworkKey.m8[13] = 0x41;
-    dataset.mNetworkKey.m8[14] = 0x4D;
-    dataset.mNetworkKey.m8[15] = 0x41;
+    uint8_t networkKey[16] = {0x48, 0x41, 0x4E, 0x41, 0x00, 0x43, 0x48, 0x41, 
+                              0x4E, 0x00, 0x48, 0x4F, 0x4B, 0x41, 0x4D, 0x41};
+    memcpy(dataset.mNetworkKey.m8, networkKey, sizeof(networkKey));
     dataset.mComponents.mIsNetworkKeyPresent = true;
 
     strncpy(dataset.mNetworkName.m8, NETWORK_NAME, OT_NETWORK_NAME_MAX_SIZE);
@@ -788,6 +772,32 @@ static void configure_network(void)
     dataset.mComponents.mIsChannelPresent = true;
 
     otDatasetSetActive(aInstance, &dataset);
+}
+
+static void configure_joiner(void)
+{
+    otInstance *aInstance = esp_openthread_get_instance();
+
+    otOperationalDataset dataset;
+
+    dataset.mPanId = 0x1707;
+    dataset.mComponents.mIsPanIdPresent = true;
+
+    uint8_t extPanId[8] = {0x48, 0x41, 0x4E, 0x41, 0x4B, 0x4F, 0x48, 0x4F};
+    memcpy(dataset.mExtendedPanId.m8, extPanId, sizeof(extPanId));
+    dataset.mComponents.mIsExtendedPanIdPresent = true;
+
+    uint8_t networkKey[16] = {0x48, 0x41, 0x4E, 0x41, 0x00, 0x43, 0x48, 0x41, 
+                              0x4E, 0x00, 0x48, 0x4F, 0x4B, 0x41, 0x4D, 0x41};
+    memcpy(dataset.mNetworkKey.m8, networkKey, sizeof(networkKey));
+    dataset.mComponents.mIsNetworkKeyPresent = true;
+
+    dataset.mChannel = NETWORK_CHANNEL;
+    dataset.mComponents.mIsChannelPresent = true;
+
+    otDatasetSetActive(aInstance, &dataset);
+
+    otThreadSetEnabled(aInstance, true);
 }
 
 /**
@@ -1196,6 +1206,13 @@ static otError configure_network_cmd(void *aContext, uint8_t aArgsLength, char *
     return OT_ERROR_NONE;
 }
 
+static otError configure_joiner_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
+{
+    configure_joiner();
+
+    return OT_ERROR_NONE;
+}
+
 /**
  * Creates an instance of thread and joins or forms the network dynamically
  */
@@ -1282,6 +1299,7 @@ void register_thread(void)
         {"start_scan", start_scan_cmd},
         {"send_verification", send_verification_cmd},
         {"configure_network", configure_network_cmd},
+        {"configure_joiner", configure_joiner_cmd},
         {"turn_on_led", turn_on_led_cmd},
         {"turn_off_led", turn_off_led_cmd}
     };

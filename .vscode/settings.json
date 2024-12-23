@@ -52,5 +52,5 @@
     "idf.toolsPathWin": "c:\\Espressif\\tools",
     "idf.gitPathWin": "c:\\Espressif\\tools\\tools\\idf-git\\2.39.2\\cmd\\git.exe",
     "idf.flashType": "UART",
-    "idf.portWin": "COM7"
+    "idf.portWin": "COM6"
 }
