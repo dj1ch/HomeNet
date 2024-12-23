@@ -67,8 +67,10 @@ uint64_t magic_num = 0x48616E616B6F;
 #define ADVERT_MSG_FORMAT "Thread device available, Magic Number: "
 #define TIMEOUT_MS 10000
 #define UDP_PORT 1602
-#define VERIF_PORT 1603
+#define VERIF_PORT 1602
 #define MAX_PEERS 10
+#define NETWORK_NAME "homenet"
+#define NETWORK_CHANNEL 15
 #define PROMPT_STR "homenet"
 #define TAG "homenet"
 
@@ -121,6 +123,7 @@ static otError send_advert_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[
 static otError start_scan_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]);
 static otError send_verification_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]);
 static otError start_chat_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]);
+static void configure_network();
 void register_thread(void);
 
 typedef struct {
@@ -130,11 +133,6 @@ typedef struct {
 } peer_verif_session;
 
 static peer_verif_session peerSessions[MAX_PEERS] = {0};
-
-/**
- * OpenThread instance for singleton pattern
- */
-otInstance *otInstancePtr = NULL;
 
 /**
  * Advertisement task handle
@@ -161,25 +159,6 @@ nvs_handle_t handle;
  * Generates a random number given a minimum and maximum range
  */
 static int random_range(int min, int max) { return min + esp_random() % (max - min + 1); }
-
-/**
- * Finds the instance of OpenThread
- * within the code and returns it.
- */
-otInstance *get_ot_instance(void)
-{
-    if (otInstancePtr == NULL) {
-        // init only once!
-        otInstancePtr = otInstanceInitSingle();
-        if (otInstancePtr == NULL) {
-            printf("Failed to initialize OpenThread instance\n");
-            return NULL;
-        }
-        printf("OpenThread instance initialized\n");
-    }
-
-    return otInstancePtr;
-}
 
 
 static otError handle_error(otError error) {
@@ -387,7 +366,7 @@ static otMessageInfo *const_ptr_ot_message_info_to_ptr(const otMessageInfo *aMes
  */static void udp_advert_rcv_cb(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
 {
     char buf[MSG_SIZE];
-    otInstance *aInstance = get_ot_instance();
+    otInstance *aInstance = esp_openthread_get_instance();
     uint16_t len = otMessageGetLength(aMessage);
 
     if (len >= MSG_SIZE)
@@ -563,7 +542,7 @@ static void send_message(otInstance *aInstance, const char *aBuf, otIp6Address *
  */
 static void send_thread_advertisement()
 {
-    otInstance *aInstance = get_ot_instance();
+    otInstance *aInstance = esp_openthread_get_instance();
 
     otError err;
     char advertMsg[ADVERT_SIZE];
@@ -844,7 +823,7 @@ static void stop_advert_task(void)
  */
 static void handshake_task(void *pvParameters)
 {
-    otInstance *aInstance = get_ot_instance();
+    otInstance *aInstance = esp_openthread_get_instance();
     otMessage *aMessage;
     int verif_code, rcv_code;
 
@@ -912,7 +891,7 @@ static void handshake_task(void *pvParameters)
  */
 static void listening_task(void *pvParameters)
 {
-    otInstance *aInstance = get_ot_instance();
+    otInstance *aInstance = esp_openthread_get_instance();
 
     // init
     otSockAddr aSockName;
@@ -940,7 +919,7 @@ static void listening_task(void *pvParameters)
  */
 static void sending_task(void *pvParameters)
 {
-    otInstance *aInstance = get_ot_instance();
+    otInstance *aInstance = esp_openthread_get_instance();
     char aBuf[128];
 
     // init
@@ -1014,7 +993,7 @@ static void start_chat(char *ipv6_addr)
  */
 static otError send_message_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
 {
-    otInstance *aInstance = get_ot_instance();
+    otInstance *aInstance = esp_openthread_get_instance();
 
     // check if the correct number of arguments is passed
     if (aArgsLength != 2)
@@ -1088,7 +1067,7 @@ static otError send_advert_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[
  */
 static otError start_scan_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
 {
-    otInstance *aInstance = get_ot_instance();
+    otInstance *aInstance = esp_openthread_get_instance();
 
     start_peer_scan(aInstance);
 
@@ -1100,7 +1079,7 @@ static otError start_scan_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]
  */
 static otError send_verification_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
 {
-    otInstance *aInstance = get_ot_instance();
+    otInstance *aInstance = esp_openthread_get_instance();
 
     // init
     otSockAddr aSockName = init_ot_sock_addr((otSockAddr){0});
@@ -1148,6 +1127,64 @@ static otError start_chat_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]
     return OT_ERROR_NONE;
 }
 
+/**
+ * Properly configures the network for use. May use TCP as well in the future
+ */
+static void configure_network()
+{
+    otInstance *aInstance = esp_openthread_get_instance();
+
+    otOperationalDataset dataset;
+    otTimestamp timestamp;
+    memset(&dataset, 0, sizeof(dataset));
+
+    // too lazy to make this a function, besides we're only doing this once
+    timestamp.mSeconds = 1024;
+    timestamp.mTicks = 1;
+    timestamp.mAuthoritative = false;
+
+    dataset.mActiveTimestamp = timestamp;
+    dataset.mComponents.mIsActiveTimestampPresent = true;
+
+    dataset.mPanId = 0x1234;
+    dataset.mComponents.mIsPanIdPresent = true;
+
+    dataset.mExtendedPanId.m8[0] = 0x48;
+    dataset.mExtendedPanId.m8[1] = 0x41;
+    dataset.mExtendedPanId.m8[2] = 0x4E;
+    dataset.mExtendedPanId.m8[3] = 0x41;
+    dataset.mExtendedPanId.m8[4] = 0x4B;
+    dataset.mExtendedPanId.m8[5] = 0x4F;
+    dataset.mExtendedPanId.m8[6] = 0x48;
+    dataset.mExtendedPanId.m8[7] = 0x4F;
+    dataset.mComponents.mIsExtendedPanIdPresent = true;
+
+    dataset.mNetworkKey.m8[0] = 0x48;
+    dataset.mNetworkKey.m8[1] = 0x41;
+    dataset.mNetworkKey.m8[2] = 0x4E;
+    dataset.mNetworkKey.m8[3] = 0x41;
+    dataset.mNetworkKey.m8[4] = 0x00;
+    dataset.mNetworkKey.m8[5] = 0x43;
+    dataset.mNetworkKey.m8[6] = 0x48;
+    dataset.mNetworkKey.m8[7] = 0x41;
+    dataset.mNetworkKey.m8[8] = 0x4E;
+    dataset.mNetworkKey.m8[9] = 0x00;
+    dataset.mNetworkKey.m8[10] = 0x48;
+    dataset.mNetworkKey.m8[11] = 0x4F;
+    dataset.mNetworkKey.m8[12] = 0x4B;
+    dataset.mNetworkKey.m8[13] = 0x41;
+    dataset.mNetworkKey.m8[14] = 0x4D;
+    dataset.mNetworkKey.m8[15] = 0x41;
+    dataset.mComponents.mIsNetworkKeyPresent = true;
+
+    strncpy(dataset.mNetworkName.m8, NETWORK_NAME, OT_NETWORK_NAME_MAX_SIZE);
+    dataset.mComponents.mIsNetworkNamePresent = true;
+
+    dataset.mChannel = NETWORK_CHANNEL;
+    dataset.mComponents.mIsChannelPresent = true;
+
+    otDatasetSetActive(aInstance, &dataset);
+}
 
 /**
  * Creates an instance of thread and joins or forms the network dynamically
@@ -1173,7 +1210,7 @@ void register_thread(void)
 #endif
 
 #if CONFIG_OPENTHREAD_LOG_LEVEL_DYNAMIC
-    (void)otLoggingSetLevel(OT_LOG_LEVEL_DEBG);
+    (void)otLoggingSetLevel(OT_LOG_LEVEL_NOTE);
 #endif
 #if CONFIG_OPENTHREAD_CLI
     esp_openthread_cli_init();
@@ -1254,27 +1291,12 @@ void register_thread(void)
     /**
      * initiates device role; if this device is the leader, it starts the network
      * otherwise, it joins the existing network dynamically.
+     * 
+     * in theory we should start as detached
     */
     otThreadSetEnabled(aInstance, true);
 
-    // check role
-    otDeviceRole role = otThreadGetDeviceRole(aInstance);
-    if (role == OT_DEVICE_ROLE_LEADER) {
-        ESP_LOGI(TAG, "This device is the leader.");
-    } else if (role == OT_DEVICE_ROLE_ROUTER || role == OT_DEVICE_ROLE_CHILD) {
-        ESP_LOGI(TAG, "This device is not the leader.");
-    }
-
-    // only one leader exists
-    while (role == OT_DEVICE_ROLE_LEADER) {
-        ESP_LOGI(TAG, "Leader detected, waiting for reelection.");
-
-        otThreadSetEnabled(aInstance, false);
-        ESP_LOGI(TAG, "Leader stepping down.");
-        
-        role = otThreadGetDeviceRole(aInstance);
-    }
-
+    configure_network();
     esp_openthread_launch_mainloop();
 
     // cleanup after mainloop stops
