@@ -64,10 +64,10 @@ uint64_t magic_num = 0x48616E616B6F;
  */
 #define MSG_SIZE 128
 #define ADVERT_SIZE 64
-#define ADVERT_MSG_FORMAT "Thread device available, Magic Number: 0x48616E616B6F"
+#define ADVERT_MSG_FORMAT "Thread device available, Magic Number: "
 #define TIMEOUT_MS 10000
 #define UDP_PORT 1602
-#define VERIF_PORT 1602
+#define VERIF_PORT 1603
 #define MAX_PEERS 10
 #define NETWORK_NAME "homenet"
 #define NETWORK_CHANNEL 15
@@ -90,36 +90,51 @@ uint64_t magic_num = 0x48616E616B6F;
  * Function definitions
  */
 static int random_range(int min, int max);
+
 static otError handle_error(otError error);
 static void handle_message_error(otMessage *aMessage, otError error);
+
 static int generate_verif_code(void);
 static void random_ipv6_addr(otInstance *aInstance);
 static otIp6Address get_ipv6_address(void);
+
 static otUdpSocket init_ot_udp_socket(otUdpSocket aSocket, otSockAddr aSockName);
 static otSockAddr init_ot_sock_addr(otSockAddr aSockName);
 static otMessageInfo init_ot_message_info(otMessageInfo aMessageInfo, otUdpSocket aSocket);
+static otUdpReceiver init_ot_udp_receiver(otUdpReceiver aReceiver);
 static otUdpSocket *ot_udp_socket_to_ptr(otUdpSocket aSocket, otUdpSocket *aSocketPtr);
 static otSockAddr *ot_sock_addr_to_ptr(otSockAddr aSockName, otSockAddr *aSockNamePtr);
 static otMessageInfo *ot_message_info_to_ptr(otMessageInfo aMessageInfo, otMessageInfo *aMessageInfoPtr);
 static otMessageInfo *const_ptr_ot_message_info_to_ptr(const otMessageInfo *aMessageInfo, otMessageInfo *aMessageInfoPtr);
-static void udp_advert_rcv_cb(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
-static void udp_msg_rcv_cb(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
-static void udp_verif_rcv_cb(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
+static otUdpReceiver *ot_udp_receiver_to_ptr(otUdpReceiver aReceiver, otUdpReceiver *aReceiverPtr);
+
+static bool udp_advert_rcv_cb(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
+static bool udp_msg_rcv_cb(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
+static bool udp_verif_rcv_cb(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
+
+static inline uint16_t get_payload_length(const otMessage *aMessage);
+static void udp_get_payload(const otMessage *aMessage, void *buffer);
+static void udp_create_receiver(otUdpReceiver *aReceiver, otUdpReceive aReceiveCallback);
 static void udp_create_socket(otUdpSocket *aSocket, otInstance *aInstance, otSockAddr *aSockName);
+static void create_receiver_socket(otInstance *aInstance, uint16_t port, otSockAddr *aSockName, otUdpSocket *aSocket);
 static void send_udp(otInstance *aInstance, uint16_t port, uint16_t destPort, otUdpSocket *aSocket, otMessage *aMessage, otMessageInfo *aMessageInfo);
+
 static void send_message(otInstance *aInstance, const char *aBuf, otIp6Address *destAddr);
 static void send_thread_advertisement(void);
 static void start_peer_scan(otInstance *aInstance);
 static void start_verif_process(otInstance *aInstance, const otMessageInfo *aMessageInfo);
 static void configure_network(void);
 static void configure_joiner(void);
+
 static void advert_task(void *argc);
 static void start_advert_task(uint32_t it);
 static void stop_advert_task(void);
 static void handshake_task(void *pvParameters);
 static void listening_task(void *pvParameters);
 static void sending_task(void *pvParameters);
+
 static void start_chat(char *ipv6_addr);
+
 static otError stop_advert_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]);
 static otError send_advert_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]);
 static otError start_scan_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]);
@@ -127,6 +142,7 @@ static otError send_verification_cmd(void *aContext, uint8_t aArgsLength, char *
 static otError start_chat_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]);
 static otError configure_network_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]);
 static otError configure_joiner_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]);
+
 void register_thread(void);
 
 typedef struct {
@@ -320,6 +336,15 @@ static otMessageInfo init_ot_message_info(otMessageInfo aMessageInfo, otUdpSocke
     return aMessageInfo;
 }
 
+static otUdpReceiver init_ot_udp_receiver(otUdpReceiver aReceiver)
+{
+    aReceiver.mContext = NULL;
+    aReceiver.mHandler = NULL;
+    aReceiver.mNext = NULL;
+
+    return aReceiver;
+}
+
 static otUdpSocket *ot_udp_socket_to_ptr(otUdpSocket aSocket, otUdpSocket *aSocketPtr)
 {
     aSocketPtr->mSockName = aSocket.mSockName;
@@ -363,116 +388,175 @@ static otMessageInfo *const_ptr_ot_message_info_to_ptr(const otMessageInfo *aMes
     return aMessageInfoPtr;
 }
 
+static otUdpReceiver *ot_udp_receiver_to_ptr(otUdpReceiver aReceiver, otUdpReceiver *aReceiverPtr)
+{
+    aReceiverPtr->mContext = aReceiver.mContext;
+    aReceiverPtr->mHandler = aReceiver.mHandler;
+    aReceiverPtr->mNext = aReceiver.mNext;
+
+    return aReceiverPtr;
+}
+
 /**
  * Setup UDP for communication
  * and recieve messages in a callback
  */
-static void udp_advert_rcv_cb(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
+static bool udp_advert_rcv_cb(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
 {
-    char buf[MSG_SIZE];
     otInstance *aInstance = esp_openthread_get_instance();
-    uint16_t len = otMessageGetLength(aMessage);
 
-    if (len >= MSG_SIZE)
-    {
-        printf("Message too long, truncating!\n");
-        len = MSG_SIZE - 1;
-    }
+    uint16_t senderPort = aMessageInfo->mPeerPort;
+    uint16_t receiverPort = aMessageInfo->mSockPort;
 
-    // copy into buffer
-    otMessageRead(aMessage, 0, buf, len);
-    buf[len] = '\0';
+    if ((senderPort == UDP_PORT) && (receiverPort == UDP_PORT)) {
+        char payload[MSG_SIZE];
+        char output[MSG_SIZE];
 
-    // check if it matches the adertisement format
-    if (strncmp(buf, ADVERT_MSG_FORMAT, strlen(ADVERT_MSG_FORMAT)) == 0)
-    {
-        uint64_t magicNumber;
-        if (sscanf(buf + strlen(ADVERT_MSG_FORMAT), "%lu", (unsigned long *)&magicNumber) == 1)
+        udpGetPayload((const otMessage *) aMessage, payload);
+
+        // check if it matches the advertisement format
+        if (strncmp(payload, ADVERT_MSG_FORMAT, strlen(ADVERT_MSG_FORMAT)) == 0)
         {
-            // check for magic number
-            if (magicNumber == magic_num)
+            uint64_t magicNumber;
+            if (sscanf(payload + strlen(ADVERT_MSG_FORMAT), "%lu", (unsigned long *)&magicNumber) == 1)
             {
-                printf("Received advertisement from a valid peer with magic number: %lu\n", (unsigned long)magicNumber);
+                // check for magic number
+                if (magicNumber == magic_num)
+                {
+                    printf("Received advertisement from a valid peer with magic number: %lu\n", (unsigned long)magicNumber);
                 
-                start_verif_process(aInstance, aMessageInfo);
+                    start_verif_process(aInstance, aMessageInfo);
+
+                    return true;
+                }
+                else
+                {
+                    printf("Invalid magic number: %lu\n", (unsigned long)magicNumber);
+                    return false;
+                }
             }
             else
             {
-                printf("Invalid magic number: %lu\n", (unsigned long)magicNumber);
+                printf("Failed to parse magic number!\n");
+                return false;
             }
         }
         else
         {
-            printf("Failed to parse magic number!\n");
+            printf("Invalid message format: %s\n", payload);
+            return false;
         }
     }
-    else
-    {
-        printf("Invalid message format: %s\n", buf);
-    }
+
+    return false;
 }
 
 
 /**
  * UDP message recieving callback
  */
-static void udp_msg_rcv_cb(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
+static bool udp_msg_rcv_cb(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
 {
-    char buffer[128];
-    int length = otMessageRead(aMessage, otMessageGetOffset(aMessage), buffer, sizeof(buffer) - 1);
+    uint16_t senderPort = aMessageInfo->mPeerPort;
+    uint16_t receiverPort = aMessageInfo->mSockPort;
 
-    if (length >= 0)
-    {
-        buffer[length] = '\0';
-        printf("Received message: %s\n", buffer);
+    if ((senderPort == UDP_PORT) && (receiverPort == UDP_PORT)) {
+        char payload[MSG_SIZE];
+        char output[MSG_SIZE];
+
+        emptyMemory(payload, MSG_SIZE);
+        emptyMemory(output, MSG_SIZE);
+
+        udp_get_payload((const otMessage *) aMessage, payload);
+        sprintf(output, "Received Message: %s", payload);
+        otLogNotePlat(output);
+
+        return true;
     }
-    else
-    {
-        printf("Failed to read message\n");
-    }
+
+    return false;
 }
 
 /**
  * UDP verification code recieving callback
  */
-static void udp_verif_rcv_cb(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
+static bool udp_verif_rcv_cb(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
 {
-    char buf[MSG_SIZE];
-    int receivedCode;
+    uint16_t senderPort = aMessageInfo->mPeerPort;
+    uint16_t receiverPort = aMessageInfo->mSockPort;
 
-    // parse the message code
-    uint16_t len = otMessageGetLength(aMessage);
-    if (len >= MSG_SIZE) {
-        printf("Received message too long!\n");
-        return;
-    }
-    otMessageRead(aMessage, 0, buf, len);
-    buf[len] = '\0';
+    if ((senderPort == UDP_PORT) && (receiverPort == UDP_PORT))
+    {
+        char payload[MSG_SIZE];
+        char output[MSG_SIZE];
+        int receivedCode;
 
-    // check if received code is valid
-    if (sscanf(buf, "Verification Code: %d", &receivedCode) == 1) {
-        for (int i = 0; i < MAX_PEERS; i++) {
-            if (peerSessions[i].active && otIp6IsAddressEqual(&peerSessions[i].peerAddr, &aMessageInfo->mPeerAddr)) {
-                if (receivedCode == peerSessions[i].expected) {
-                    printf("Peer successfully verified with code: %d\n", receivedCode);
-                    peerSessions[i].active = false;
+        emptyMemory(payload, MSG_SIZE);
+        emptyMemory(output, MSG_SIZE);
 
-                    // save the peer by putting their address in NVS afterwards
-                    esp_err_t err = nvs_set_blob(handle, "deviceA_addr", &peerSessions[i].peerAddr, sizeof(peerSessions[i].peerAddr));
-                    printf("Peer name saved in NVS!");
-                    if (err != ESP_OK) {
-                        printf("Failed to store peer address in NVS\n");
+        udp_get_payload((const otMessage *) aMessage, payload);
+
+            // check if received code is valid
+        if (sscanf(payload, "Verification Code: %d", &receivedCode) == 1) {
+            for (int i = 0; i < MAX_PEERS; i++) {
+                if (peerSessions[i].active && otIp6IsAddressEqual(&peerSessions[i].peerAddr, &aMessageInfo->mPeerAddr)) {
+                    if (receivedCode == peerSessions[i].expected) {
+                        printf("Peer successfully verified with code: %d\n", receivedCode);
+                        peerSessions[i].active = false;
+
+                        // save the peer by putting their address in NVS afterwards
+                        esp_err_t err = nvs_set_blob(handle, "deviceA_addr", &peerSessions[i].peerAddr, sizeof(peerSessions[i].peerAddr));
+                        printf("Peer name saved in NVS!");
+                        if (err != ESP_OK) 
+                        {
+                            printf("Failed to store peer address in NVS\n");
+                            return false;
+                        }
+
+                        return true;
                     }
-                } else {
-                    printf("Invalid verification response code: %d\n", receivedCode);
+                    else 
+                    {
+                        printf("Invalid verification response code: %d\n", receivedCode);
+                    }
+                    return false;
                 }
-                return;
             }
+            printf("Verification session not found for this peer!\n");
+            return false;
+        } 
+        else 
+        {
+            printf("Failed to parse verification response!\n");
+            return false;
         }
-        printf("Verification session not found for this peer!\n");
-    } else {
-        printf("Failed to parse verification response!\n");
     }
+
+    return false;
+}
+
+static inline uint16_t get_payload_length(const otMessage *aMessage)
+{
+    return otMessageGetLength(aMessage) - otMessageGetOffset(aMessage);
+}
+
+static void udp_get_payload(const otMessage *aMessage, void *buffer)
+{
+    uint16_t offset = otMessageGetOffset(aMessage);
+    uint16_t length = getPayloadLength(aMessage);
+    
+    uint16_t bytesRead = otMessageRead(aMessage, offset, buffer, length);
+    assert(bytesRead == length);
+    return;
+}
+
+static void udp_create_receiver(otUdpReceiver *aReceiver, otUdpReceive aReceiveCallback)
+{
+    otInstance *aInstance = esp_openthread_get_instance();
+
+    aReceiver->mHandler = aReceiveCallback;
+    handleError(otUdpAddReceiver(aInstance, aReceiver));
+    return;
 }
 
 static void udp_create_socket(otUdpSocket *aSocket, otInstance *aInstance, otSockAddr *aSockName)
@@ -482,6 +566,14 @@ static void udp_create_socket(otUdpSocket *aSocket, otInstance *aInstance, otSoc
     return;
 }
 
+static void create_receiver_socket(otInstance *aInstance, uint16_t port, otSockAddr *aSockName, otUdpSocket *aSocket)
+{
+    aSockName->mAddress = *otThreadGetMeshLocalEid(aInstance);
+    aSockName->mPort = port;
+
+    udpCreateSocket(aSocket, aInstance, aSockName);
+    return;
+}
 
 static void send_udp(otInstance *aInstance, uint16_t port, uint16_t destPort, otUdpSocket *aSocket, otMessage *aMessage, otMessageInfo *aMessageInfo)
 {
@@ -600,19 +692,20 @@ static void send_thread_advertisement(void)
 static void start_peer_scan(otInstance *aInstance)
 {
     otError err;
+    otInstance *aInstance = esp_openthread_get_instance();
 
     // init
     otSockAddr aSockName = init_ot_sock_addr((otSockAddr){0});
     otUdpSocket aSocket = init_ot_udp_socket((otUdpSocket){0}, aSockName);
-    otMessageInfo aMessageInfo = init_ot_message_info((otMessageInfo){0}, aSocket);
+    otUdpReceiver aReceiver = init_ot_udp_receiver((otUdpReceiver){0});
 
     otSockAddr aSockNamePtr;
     otUdpSocket aSocketPtr;
-    otMessageInfo aMessageInfoPtr;
+    otUdpReceiver aReceiverPtr;
 
     ot_sock_addr_to_ptr(aSockName, &aSockNamePtr);
     ot_udp_socket_to_ptr(aSocket, &aSocketPtr);
-    ot_message_info_to_ptr(aMessageInfo, &aMessageInfoPtr);
+    ot_udp_receiver_to_ptr(aReceiver, &aReceiverPtr);
 
     // create UDP socket
     otIp6AddressFromString("ff03::1", &aSockName.mAddress);
@@ -624,22 +717,8 @@ static void start_peer_scan(otInstance *aInstance)
      * https://github.com/openthread/ot-efr32/blob/6fcb36d3021bc95e5fb35eaf478f647ec099f797/examples/sleepy-demo/sleepy-mtd.c#L271
      */
 
-    err = otUdpOpen(aInstance, &aSocketPtr, udp_advert_rcv_cb, NULL);
-    if (err != OT_ERROR_NONE)
-    {
-        printf("Failed to open UDP socket!\n");
-        otCliOutputFormat("Error: %d, %s\r\n", err, otThreadErrorToString(err));
-        return;
-    }
-
-    // bind socket to port
-    err = otUdpBind(aInstance, &aSocketPtr, &aSockNamePtr, OT_NETIF_THREAD);
-    if (err != OT_ERROR_NONE)
-    {
-        printf("Failed to bind UDP socket!\n");
-        otCliOutputFormat("Error: %d, %s\r\n", err, otThreadErrorToString(err));
-        return;
-    }
+    create_receiver_socket(aInstance, UDP_PORT, &aSockName, &aSocket);
+    udp_create_receiver(aInstance, udp_advert_rcv_cb);
 
     printf("Listening for peer advertisements on port %u\n", UDP_PORT);
 }
@@ -668,7 +747,6 @@ static void start_verif_process(otInstance *aInstance, const otMessageInfo *aMes
     // init
     otSockAddr aSockName = init_ot_sock_addr((otSockAddr){0});
     otUdpSocket aSocket = init_ot_udp_socket((otUdpSocket){0}, aSockName);
-    
 
     otSockAddr aSockNamePtr;
     otUdpSocket aSocketPtr;
