@@ -94,7 +94,7 @@ static otError handle_error(otError error);
 static void handle_message_error(otMessage *aMessage, otError error);
 static int generate_verif_code(void);
 static void random_ipv6_addr(otInstance *aInstance);
-static otIp6Address get_ipv6_address();
+static otIp6Address get_ipv6_address(void);
 static otUdpSocket init_ot_udp_socket(otUdpSocket aSocket, otSockAddr aSockName);
 static otSockAddr init_ot_sock_addr(otSockAddr aSockName);
 static otMessageInfo init_ot_message_info(otMessageInfo aMessageInfo, otUdpSocket aSocket);
@@ -108,9 +108,10 @@ static void udp_verif_rcv_cb(void *aContext, otMessage *aMessage, const otMessag
 static void udp_create_socket(otUdpSocket *aSocket, otInstance *aInstance, otSockAddr *aSockName);
 static void send_udp(otInstance *aInstance, uint16_t port, uint16_t destPort, otUdpSocket *aSocket, otMessage *aMessage, otMessageInfo *aMessageInfo);
 static void send_message(otInstance *aInstance, const char *aBuf, otIp6Address *destAddr);
-static void send_thread_advertisement();
+static void send_thread_advertisement(void);
 static void start_peer_scan(otInstance *aInstance);
 static void start_verif_process(otInstance *aInstance, const otMessageInfo *aMessageInfo);
+static void configure_network(void);
 static void advert_task(void *argc);
 static void start_advert_task(uint32_t it);
 static void stop_advert_task(void);
@@ -123,7 +124,7 @@ static otError send_advert_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[
 static otError start_scan_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]);
 static otError send_verification_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]);
 static otError start_chat_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]);
-static void configure_network();
+static otError configure_network_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]);
 void register_thread(void);
 
 typedef struct {
@@ -540,7 +541,7 @@ static void send_message(otInstance *aInstance, const char *aBuf, otIp6Address *
 /**
  * Sends advertisement for clients to find
  */
-static void send_thread_advertisement()
+static void send_thread_advertisement(void)
 {
     otInstance *aInstance = esp_openthread_get_instance();
 
@@ -726,6 +727,67 @@ static void start_verif_process(otInstance *aInstance, const otMessageInfo *aMes
     }
 
     vTaskDelay(pdMS_TO_TICKS(TIMEOUT_MS));
+}
+
+/**
+ * Properly configures the network for use. May use TCP as well in the future
+ */
+static void configure_network(void)
+{
+    otInstance *aInstance = esp_openthread_get_instance();
+
+    otThreadSetEnabled(aInstance, true);
+
+    otOperationalDataset dataset;
+    otTimestamp timestamp;
+    memset(&dataset, 0, sizeof(dataset));
+
+    // too lazy to make this a function, besides we're only doing this once
+    timestamp.mSeconds = 1024;
+    timestamp.mTicks = 1;
+    timestamp.mAuthoritative = false;
+
+    dataset.mActiveTimestamp = timestamp;
+    dataset.mComponents.mIsActiveTimestampPresent = true;
+
+    dataset.mPanId = 0x1234;
+    dataset.mComponents.mIsPanIdPresent = true;
+
+    dataset.mExtendedPanId.m8[0] = 0x48;
+    dataset.mExtendedPanId.m8[1] = 0x41;
+    dataset.mExtendedPanId.m8[2] = 0x4E;
+    dataset.mExtendedPanId.m8[3] = 0x41;
+    dataset.mExtendedPanId.m8[4] = 0x4B;
+    dataset.mExtendedPanId.m8[5] = 0x4F;
+    dataset.mExtendedPanId.m8[6] = 0x48;
+    dataset.mExtendedPanId.m8[7] = 0x4F;
+    dataset.mComponents.mIsExtendedPanIdPresent = true;
+
+    dataset.mNetworkKey.m8[0] = 0x48;
+    dataset.mNetworkKey.m8[1] = 0x41;
+    dataset.mNetworkKey.m8[2] = 0x4E;
+    dataset.mNetworkKey.m8[3] = 0x41;
+    dataset.mNetworkKey.m8[4] = 0x00;
+    dataset.mNetworkKey.m8[5] = 0x43;
+    dataset.mNetworkKey.m8[6] = 0x48;
+    dataset.mNetworkKey.m8[7] = 0x41;
+    dataset.mNetworkKey.m8[8] = 0x4E;
+    dataset.mNetworkKey.m8[9] = 0x00;
+    dataset.mNetworkKey.m8[10] = 0x48;
+    dataset.mNetworkKey.m8[11] = 0x4F;
+    dataset.mNetworkKey.m8[12] = 0x4B;
+    dataset.mNetworkKey.m8[13] = 0x41;
+    dataset.mNetworkKey.m8[14] = 0x4D;
+    dataset.mNetworkKey.m8[15] = 0x41;
+    dataset.mComponents.mIsNetworkKeyPresent = true;
+
+    strncpy(dataset.mNetworkName.m8, NETWORK_NAME, OT_NETWORK_NAME_MAX_SIZE);
+    dataset.mComponents.mIsNetworkNamePresent = true;
+
+    dataset.mChannel = NETWORK_CHANNEL;
+    dataset.mComponents.mIsChannelPresent = true;
+
+    otDatasetSetActive(aInstance, &dataset);
 }
 
 /**
@@ -1127,63 +1189,11 @@ static otError start_chat_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]
     return OT_ERROR_NONE;
 }
 
-/**
- * Properly configures the network for use. May use TCP as well in the future
- */
-static void configure_network()
+static otError configure_network_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
 {
-    otInstance *aInstance = esp_openthread_get_instance();
+    configure_network();
 
-    otOperationalDataset dataset;
-    otTimestamp timestamp;
-    memset(&dataset, 0, sizeof(dataset));
-
-    // too lazy to make this a function, besides we're only doing this once
-    timestamp.mSeconds = 1024;
-    timestamp.mTicks = 1;
-    timestamp.mAuthoritative = false;
-
-    dataset.mActiveTimestamp = timestamp;
-    dataset.mComponents.mIsActiveTimestampPresent = true;
-
-    dataset.mPanId = 0x1234;
-    dataset.mComponents.mIsPanIdPresent = true;
-
-    dataset.mExtendedPanId.m8[0] = 0x48;
-    dataset.mExtendedPanId.m8[1] = 0x41;
-    dataset.mExtendedPanId.m8[2] = 0x4E;
-    dataset.mExtendedPanId.m8[3] = 0x41;
-    dataset.mExtendedPanId.m8[4] = 0x4B;
-    dataset.mExtendedPanId.m8[5] = 0x4F;
-    dataset.mExtendedPanId.m8[6] = 0x48;
-    dataset.mExtendedPanId.m8[7] = 0x4F;
-    dataset.mComponents.mIsExtendedPanIdPresent = true;
-
-    dataset.mNetworkKey.m8[0] = 0x48;
-    dataset.mNetworkKey.m8[1] = 0x41;
-    dataset.mNetworkKey.m8[2] = 0x4E;
-    dataset.mNetworkKey.m8[3] = 0x41;
-    dataset.mNetworkKey.m8[4] = 0x00;
-    dataset.mNetworkKey.m8[5] = 0x43;
-    dataset.mNetworkKey.m8[6] = 0x48;
-    dataset.mNetworkKey.m8[7] = 0x41;
-    dataset.mNetworkKey.m8[8] = 0x4E;
-    dataset.mNetworkKey.m8[9] = 0x00;
-    dataset.mNetworkKey.m8[10] = 0x48;
-    dataset.mNetworkKey.m8[11] = 0x4F;
-    dataset.mNetworkKey.m8[12] = 0x4B;
-    dataset.mNetworkKey.m8[13] = 0x41;
-    dataset.mNetworkKey.m8[14] = 0x4D;
-    dataset.mNetworkKey.m8[15] = 0x41;
-    dataset.mComponents.mIsNetworkKeyPresent = true;
-
-    strncpy(dataset.mNetworkName.m8, NETWORK_NAME, OT_NETWORK_NAME_MAX_SIZE);
-    dataset.mComponents.mIsNetworkNamePresent = true;
-
-    dataset.mChannel = NETWORK_CHANNEL;
-    dataset.mComponents.mIsChannelPresent = true;
-
-    otDatasetSetActive(aInstance, &dataset);
+    return OT_ERROR_NONE;
 }
 
 /**
@@ -1271,6 +1281,7 @@ void register_thread(void)
         {"stop_advert", stop_advert_cmd},
         {"start_scan", start_scan_cmd},
         {"send_verification", send_verification_cmd},
+        {"configure_network", configure_network_cmd},
         {"turn_on_led", turn_on_led_cmd},
         {"turn_off_led", turn_off_led_cmd}
     };
@@ -1294,9 +1305,6 @@ void register_thread(void)
      * 
      * in theory we should start as detached
     */
-    otThreadSetEnabled(aInstance, true);
-
-    configure_network();
     esp_openthread_launch_mainloop();
 
     // cleanup after mainloop stops
