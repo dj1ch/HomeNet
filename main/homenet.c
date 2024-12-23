@@ -46,10 +46,6 @@ void app_main(void)
     repl_config.prompt = PROMPT_STR ">";
     repl_config.max_cmdline_length = 256;
 
-    /* Register commands */
-    esp_console_register_help_command();
-    register_system_common();
-
     /* Register HomeNet */
     register_thread();
 
