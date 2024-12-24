@@ -16,6 +16,7 @@
  */
 
 #include "thread_cmd.h"
+#include "tcp_cmd.h"
 #include "chat_cmd.h"
 #include "led_cmd.h"
 #include <stdio.h>
@@ -27,7 +28,6 @@
 #include "esp_event.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-#include "openthread/instance.h"
 #include "openthread/thread.h"
 #include "openthread/message.h"
 #include "openthread/udp.h"
@@ -88,15 +88,15 @@ static void handle_message_error(otMessage *aMessage, otError error);
 static void random_ipv6_addr(otInstance *aInstance);
 static otIp6Address get_ipv6_address(void);
 
-static otUdpSocket init_ot_udp_socket(otUdpSocket aSocket, otSockAddr aSockName);
-static otSockAddr init_ot_sock_addr(otSockAddr aSockName);
-static otMessageInfo init_ot_message_info(otMessageInfo aMessageInfo, otUdpSocket aSocket);
-static otUdpReceiver init_ot_udp_receiver(otUdpReceiver aReceiver);
-static otUdpSocket *ot_udp_socket_to_ptr(otUdpSocket aSocket, otUdpSocket *aSocketPtr);
-static otSockAddr *ot_sock_addr_to_ptr(otSockAddr aSockName, otSockAddr *aSockNamePtr);
-static otMessageInfo *ot_message_info_to_ptr(otMessageInfo aMessageInfo, otMessageInfo *aMessageInfoPtr);
-static otMessageInfo *const_ptr_ot_message_info_to_ptr(const otMessageInfo *aMessageInfo, otMessageInfo *aMessageInfoPtr);
-static otUdpReceiver *ot_udp_receiver_to_ptr(otUdpReceiver aReceiver, otUdpReceiver *aReceiverPtr);
+otUdpSocket init_ot_udp_socket(otUdpSocket aSocket, otSockAddr aSockName);
+otSockAddr init_ot_sock_addr(otSockAddr aSockName);
+otMessageInfo init_ot_message_info(otMessageInfo aMessageInfo, otUdpSocket aSocket);
+otUdpReceiver init_ot_udp_receiver(otUdpReceiver aReceiver);
+otUdpSocket *ot_udp_socket_to_ptr(otUdpSocket aSocket, otUdpSocket *aSocketPtr);
+otSockAddr *ot_sock_addr_to_ptr(otSockAddr aSockName, otSockAddr *aSockNamePtr);
+otMessageInfo *ot_message_info_to_ptr(otMessageInfo aMessageInfo, otMessageInfo *aMessageInfoPtr);
+otMessageInfo *const_ptr_ot_message_info_to_ptr(const otMessageInfo *aMessageInfo, otMessageInfo *aMessageInfoPtr);
+otUdpReceiver *ot_udp_receiver_to_ptr(otUdpReceiver aReceiver, otUdpReceiver *aReceiverPtr);
 
 static bool udp_advert_rcv_cb(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
 static bool udp_msg_rcv_cb(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);

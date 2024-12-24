@@ -45,7 +45,10 @@
         "esp_err.h": "c",
         "gpio.h": "c",
         "gpio_etm.h": "c",
-        "thread.h": "c"
+        "thread.h": "c",
+        "tcp.h": "c",
+        "tcp_ext.h": "c",
+        "system_error": "c"
     },
     "idf.espIdfPathWin": "c:\\Espressif\\containers\\v5.3\\esp-idf",
     "idf.pythonBinPathWin": "c:\\Espressif\\tools\\python_env\\idf5.3_py3.11_env\\Scripts\\python.exe",
