@@ -98,22 +98,9 @@ otMessageInfo *ot_message_info_to_ptr(otMessageInfo aMessageInfo, otMessageInfo 
 otMessageInfo *const_ptr_ot_message_info_to_ptr(const otMessageInfo *aMessageInfo, otMessageInfo *aMessageInfoPtr);
 otUdpReceiver *ot_udp_receiver_to_ptr(otUdpReceiver aReceiver, otUdpReceiver *aReceiverPtr);
 
-static bool udp_advert_rcv_cb(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
-static bool udp_msg_rcv_cb(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
-static bool udp_verif_rcv_cb(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
-
-static inline uint16_t get_payload_length(const otMessage *aMessage);
-static void udp_get_payload(const otMessage *aMessage, void *buffer);
-static void udp_create_receiver(otUdpReceiver *aReceiver, otUdpReceive aReceiveCallback);
-static void udp_create_socket(otUdpSocket *aSocket, otInstance *aInstance, otSockAddr *aSockName);
-static void create_receiver_socket(otInstance *aInstance, uint16_t port, otSockAddr *aSockName, otUdpSocket *aSocket);
-static void send_udp(otInstance *aInstance, uint16_t port, uint16_t destPort, otUdpSocket *aSocket, otMessage *aMessage, otMessageInfo *aMessageInfo);
-
-static void send_message(otInstance *aInstance, const char *aBuf, otIp6Address *destAddr);
 static void configure_network(void);
 static void configure_joiner(void);
 
-static otError send_message_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]);
 static otError configure_network_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]);
 static otError configure_joiner_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]);
 
@@ -213,7 +200,7 @@ static otIp6Address get_ipv6_address()
 /**
  * Initializes aSocket
  */
-static otUdpSocket init_ot_udp_socket(otUdpSocket aSocket, otSockAddr aSockName)
+otUdpSocket init_ot_udp_socket(otUdpSocket aSocket, otSockAddr aSockName)
 {   
     // reset
     memset(&aSocket, 0, sizeof(aSocket));
@@ -230,7 +217,7 @@ static otUdpSocket init_ot_udp_socket(otUdpSocket aSocket, otSockAddr aSockName)
 /**
  * Initializes aSockName
  */
-static otSockAddr init_ot_sock_addr(otSockAddr aSockName)
+otSockAddr init_ot_sock_addr(otSockAddr aSockName)
 {
     // reset
     memset(&aSockName, 0, sizeof(aSockName));
@@ -245,7 +232,7 @@ static otSockAddr init_ot_sock_addr(otSockAddr aSockName)
 /**
  * Initializes aMessageInfo
  */
-static otMessageInfo init_ot_message_info(otMessageInfo aMessageInfo, otUdpSocket aSocket)
+otMessageInfo init_ot_message_info(otMessageInfo aMessageInfo, otUdpSocket aSocket)
 {
     // reset
     memset(&aMessageInfo, 0, sizeof(aMessageInfo));
@@ -260,7 +247,7 @@ static otMessageInfo init_ot_message_info(otMessageInfo aMessageInfo, otUdpSocke
     return aMessageInfo;
 }
 
-static otUdpReceiver init_ot_udp_receiver(otUdpReceiver aReceiver)
+otUdpReceiver init_ot_udp_receiver(otUdpReceiver aReceiver)
 {
     aReceiver.mContext = NULL;
     aReceiver.mHandler = NULL;
@@ -269,7 +256,7 @@ static otUdpReceiver init_ot_udp_receiver(otUdpReceiver aReceiver)
     return aReceiver;
 }
 
-static otUdpSocket *ot_udp_socket_to_ptr(otUdpSocket aSocket, otUdpSocket *aSocketPtr)
+otUdpSocket *ot_udp_socket_to_ptr(otUdpSocket aSocket, otUdpSocket *aSocketPtr)
 {
     aSocketPtr->mSockName = aSocket.mSockName;
     aSocketPtr->mPeerName.mPort = aSocket.mPeerName.mPort;
@@ -280,7 +267,7 @@ static otUdpSocket *ot_udp_socket_to_ptr(otUdpSocket aSocket, otUdpSocket *aSock
     return aSocketPtr;
 }
 
-static otSockAddr *ot_sock_addr_to_ptr(otSockAddr aSockName, otSockAddr *aSockNamePtr)
+otSockAddr *ot_sock_addr_to_ptr(otSockAddr aSockName, otSockAddr *aSockNamePtr)
 {
     aSockNamePtr->mAddress = aSockName.mAddress;
     aSockNamePtr->mPort = aSockName.mPort;
@@ -288,7 +275,7 @@ static otSockAddr *ot_sock_addr_to_ptr(otSockAddr aSockName, otSockAddr *aSockNa
     return aSockNamePtr;
 }
 
-static otMessageInfo *ot_message_info_to_ptr(otMessageInfo aMessageInfo, otMessageInfo *aMessageInfoPtr)
+otMessageInfo *ot_message_info_to_ptr(otMessageInfo aMessageInfo, otMessageInfo *aMessageInfoPtr)
 {
     aMessageInfoPtr->mSockAddr = aMessageInfo.mSockAddr;
     aMessageInfoPtr->mSockPort = aMessageInfo.mSockPort;
@@ -300,7 +287,7 @@ static otMessageInfo *ot_message_info_to_ptr(otMessageInfo aMessageInfo, otMessa
     return aMessageInfoPtr;
 }
 
-static otMessageInfo *const_ptr_ot_message_info_to_ptr(const otMessageInfo *aMessageInfo, otMessageInfo *aMessageInfoPtr)
+otMessageInfo *const_ptr_ot_message_info_to_ptr(const otMessageInfo *aMessageInfo, otMessageInfo *aMessageInfoPtr)
 {
     aMessageInfoPtr->mSockAddr = aMessageInfo->mSockAddr;
     aMessageInfoPtr->mSockPort = aMessageInfo->mSockPort;
@@ -312,7 +299,7 @@ static otMessageInfo *const_ptr_ot_message_info_to_ptr(const otMessageInfo *aMes
     return aMessageInfoPtr;
 }
 
-static otUdpReceiver *ot_udp_receiver_to_ptr(otUdpReceiver aReceiver, otUdpReceiver *aReceiverPtr)
+otUdpReceiver *ot_udp_receiver_to_ptr(otUdpReceiver aReceiver, otUdpReceiver *aReceiverPtr)
 {
     aReceiverPtr->mContext = aReceiver.mContext;
     aReceiverPtr->mHandler = aReceiver.mHandler;

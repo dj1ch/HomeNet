@@ -5,5 +5,5 @@
 #include "esp_openthread.h"
 #include "openthread/error.h"
 
-otError send_message_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]);
+extern otError send_message_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]);
 void register_tcp(void);

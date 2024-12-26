@@ -1,6 +1,7 @@
 #pragma once
 
 #define OT_ARRAY_LENGTH(aArray) (sizeof(aArray) / sizeof(aArray[0]))
+#define EmptyMemory(pointer, size) memset((void *) pointer, 0, size)
 
 #include "nvs_flash.h"
 #include "nvs.h"
