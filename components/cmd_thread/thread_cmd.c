@@ -16,7 +16,7 @@
  */
 
 #include "thread_cmd.h"
-#include "tcp_cmd.h"
+#include "udp_cmd.h"
 #include "chat_cmd.h"
 #include "led_cmd.h"
 #include <stdio.h>
@@ -82,11 +82,11 @@ uint64_t magic_num = 0x48616E616B6F;
 /**
  * Function definitions
  */
-static otError handle_error(otError error);
-static void handle_message_error(otMessage *aMessage, otError error);
+otError handle_error(otError error);
+void handle_message_error(otMessage *aMessage, otError error);
 
-static void random_ipv6_addr(otInstance *aInstance);
-static otIp6Address get_ipv6_address(void);
+void random_ipv6_addr(otInstance *aInstance);
+otIp6Address get_ipv6_address(void);
 
 otUdpSocket init_ot_udp_socket(otUdpSocket aSocket, otSockAddr aSockName);
 otSockAddr init_ot_sock_addr(otSockAddr aSockName);
@@ -111,7 +111,7 @@ void register_thread(void);
  */
 nvs_handle_t handle;
 
-static otError handle_error(otError error) {
+otError handle_error(otError error) {
   if (error != OT_ERROR_NONE) {
     ERROR_PRINT(otLogCritPlat("%s", otThreadErrorToString(error)));
   }
@@ -129,7 +129,7 @@ void handle_message_error(otMessage *aMessage, otError error) {
  * Generate a random ID to use when communicating 
  * with another client
  */
-static void random_ipv6_addr(otInstance *aInstance)
+void random_ipv6_addr(otInstance *aInstance)
 {
     // create an instance of the address
     otNetifAddress addr;
@@ -167,7 +167,7 @@ static void random_ipv6_addr(otInstance *aInstance)
 /**
  * Gets current ipv6 address to be used for other structures or functions
  */
-static otIp6Address get_ipv6_address()
+otIp6Address get_ipv6_address()
 {
     // get local eid instead
     const otIp6Address *addr = {0};
@@ -454,9 +454,11 @@ void register_thread(void)
     aSocket = init_ot_udp_socket(aSocket, aSockName);
     aMessageInfo = init_ot_message_info(aMessageInfo, aSocket);
 
+    register_udp(aInstance);
+
     // init UDP for messaging system
-    ESP_ERROR_CHECK(otUdpOpen(aInstance, &aSocket, NULL, NULL));
-    ESP_ERROR_CHECK(otUdpBind(aInstance, &aSocket, &aSockName, OT_NETIF_THREAD));
+    otUdpOpen(aInstance, &aSocket, NULL, NULL);
+    otUdpBind(aInstance, &aSocket, &aSockName, OT_NETIF_THREAD);
 
 #if CONFIG_OPENTHREAD_CLI_ESP_EXTENSION
     esp_cli_custom_command_init();

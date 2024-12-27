@@ -49,7 +49,16 @@
         "tcp.h": "c",
         "tcp_ext.h": "c",
         "system_error": "c",
-        "tcp_cmd.h": "c"
+        "tcp_cmd.h": "c",
+        "thread_cmd.h": "c",
+        "array": "c",
+        "deque": "c",
+        "list": "c",
+        "string": "c",
+        "unordered_map": "c",
+        "vector": "c",
+        "iterator": "c",
+        "string_view": "c"
     },
     "idf.espIdfPathWin": "c:\\Espressif\\containers\\v5.3\\esp-idf",
     "idf.pythonBinPathWin": "c:\\Espressif\\tools\\python_env\\idf5.3_py3.11_env\\Scripts\\python.exe",
