@@ -101,19 +101,13 @@ void udp_init_rx(otUdpReceiver *receiver) {
     return;
 }
 
-void udp_create_rx(otInstance *aInstance, otUdpReceiver *receiver) {
+void udp_create_rx(otInstance *aInstance, otUdpReceiver *receiver, otSockAddr *aSockName, otUdpSocket *aSocket) {
     receiver->mHandler = udp_msg_rcv_cb;
     receiver->mContext = NULL;
     receiver->mNext = NULL;
-
-    otSockAddr aSockName = init_ot_sock_addr(aSockName);
-    aSockName.mPort = UDP_PORT;
-    aSockName.mAddress = *otThreadGetMeshLocalEid(aInstance);
-
-    otUdpSocket aSocket = init_ot_udp_socket(aSocket, aSockName);
-
-    handle_error(otUdpOpen(aInstance, &aSocket, NULL, NULL));
-    handle_error(otUdpBind(aInstance, &aSocket, &aSockName, OT_NETIF_THREAD));
+    
+    handle_error(otUdpOpen(aInstance, aSocket, NULL, NULL));
+    handle_error(otUdpBind(aInstance, aSocket, aSockName, OT_NETIF_THREAD));
     handle_error(otUdpAddReceiver(aInstance, receiver));
     return;
 }
@@ -206,8 +200,8 @@ otError send_message_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
     return OT_ERROR_NONE;
 }
 
-void register_udp(otInstance *aInstance)
+void register_udp(otInstance *aInstance, otSockAddr *aSockName, otUdpSocket *aSocket)
 {
     otUdpReceiver receiver;
-    udp_create_rx(aInstance, &receiver);
+    udp_create_rx(aInstance, &receiver, aSockName, aSocket);
 }

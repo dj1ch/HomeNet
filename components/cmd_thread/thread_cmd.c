@@ -454,11 +454,7 @@ void register_thread(void)
     aSocket = init_ot_udp_socket(aSocket, aSockName);
     aMessageInfo = init_ot_message_info(aMessageInfo, aSocket);
 
-    register_udp(aInstance);
-
-    // init UDP for messaging system
-    otUdpOpen(aInstance, &aSocket, NULL, NULL);
-    otUdpBind(aInstance, &aSocket, &aSockName, OT_NETIF_THREAD);
+    register_udp(aInstance, &aSockName, &aSocket);
 
 #if CONFIG_OPENTHREAD_CLI_ESP_EXTENSION
     esp_cli_custom_command_init();

@@ -7,4 +7,4 @@
 #include "openthread/error.h"
 
 otError send_message_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]);
-void register_udp(otInstance *aInstance);
+void register_udp(otInstance *aInstance, otSockAddr *aSockName, otUdpSocket *aSocket);
