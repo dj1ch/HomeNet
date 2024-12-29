@@ -348,6 +348,9 @@ static void configure_network(void)
     dataset.mComponents.mIsChannelPresent = true;
 
     otDatasetSetActive(aInstance, &dataset);
+
+    otCliInputLine("udp open");
+    otCliInputLine("udp bind :: 1602");
 }
 
 static void configure_joiner(void)
@@ -374,6 +377,8 @@ static void configure_joiner(void)
     otDatasetSetActive(aInstance, &dataset);
 
     otThreadSetEnabled(aInstance, true);
+
+    otCliInputLine("udp open");
 }
 
 static otError configure_network_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
@@ -454,7 +459,7 @@ void register_thread(void)
     aSocket = init_ot_udp_socket(aSocket, aSockName);
     aMessageInfo = init_ot_message_info(aMessageInfo, aSocket);
 
-    register_udp(aInstance, &aSockName, &aSocket);
+    register_udp();
 
 #if CONFIG_OPENTHREAD_CLI_ESP_EXTENSION
     esp_cli_custom_command_init();

@@ -130,43 +130,15 @@ static void send_udp(otInstance *aInstance, uint16_t port, uint16_t destPort, ot
  */
 static void send_message(otInstance *aInstance, const char *aBuf, otIp6Address *destAddr)
 {
-    otError err;
-    otMessage *aMessage;
+    char command[256];
+    char addrStr[OT_IP6_ADDRESS_STRING_SIZE];
 
-    // init
-    otSockAddr aSockName = init_ot_sock_addr((otSockAddr){0});
-    otUdpSocket aSocket = init_ot_udp_socket((otUdpSocket){0}, aSockName);
-    otMessageInfo aMessageInfo = init_ot_message_info((otMessageInfo){0}, aSocket);
+    // convert the address to a string
+    otIp6AddressToString(destAddr, addrStr, sizeof(addrStr));
+    snprintf(command, sizeof(command), "udp send %s %u %s", addrStr, UDP_PORT, aBuf);
 
-    otSockAddr aSockNamePtr;
-    otUdpSocket aSocketPtr;
-    otMessageInfo aMessageInfoPtr;
-
-    ot_sock_addr_to_ptr(aSockName, &aSockNamePtr);
-    ot_udp_socket_to_ptr(aSocket, &aSocketPtr);
-    ot_message_info_to_ptr(aMessageInfo, &aMessageInfoPtr);
-
-    // create new message
-    aMessage = otUdpNewMessage(aInstance, NULL);
-    if (aMessage == NULL)
-    {
-        printf("Failed to allocate new UDP message\n");
-        return;
-    }
-
-    err = otMessageAppend(aMessage, aBuf, strlen(aBuf));
-    if (err != OT_ERROR_NONE)
-    {
-        printf("Failed to append data to message: %s\n", otThreadErrorToString(err));
-        otMessageFree(aMessage);
-        return;
-    }
-
-    udp_create_socket(&aSocket, aInstance, &aSockName);
-    send_udp(aInstance, UDP_PORT, UDP_PORT, &aSocket, aMessage, &aMessageInfo);
-
-    // close the socket
-    otUdpClose(aInstance, &aSocket);
+    // lazy hack to send a message
+    otCliInputLine(command);
 }
 
 /**
@@ -200,8 +172,7 @@ otError send_message_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
     return OT_ERROR_NONE;
 }
 
-void register_udp(otInstance *aInstance, otSockAddr *aSockName, otUdpSocket *aSocket)
+void register_udp()
 {
-    otUdpReceiver receiver;
-    udp_create_rx(aInstance, &receiver, aSockName, aSocket);
+    printf("doing nothing\n");
 }
