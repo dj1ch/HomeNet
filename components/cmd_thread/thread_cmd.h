@@ -14,8 +14,7 @@ extern nvs_handle_t handle;
 otError handle_error(otError error);
 void handle_message_error(otMessage *aMessage, otError error);
 
-void random_ipv6_addr(otInstance *aInstance);
-otIp6Address get_ipv6_address(void);
+otIp6Address *get_ipv6_address(void);
 
 otUdpSocket init_ot_udp_socket(otUdpSocket aSocket, otSockAddr aSockName);
 otSockAddr init_ot_sock_addr(otSockAddr aSockName);

@@ -52,7 +52,11 @@ At the core, this is a simple P2P (ad-hoc style) mesh network created with the h
 
 Thread is a low-power, low latency mesh network technology designed for Internet of Things (IoT) devices. It enabled devices to communicate **directly** (keep in mind very important) with each other, forming a resilient network with multiple paths to reach each node.
 
-In simpler words, Thread is a resilient network designed to handle potentially harmful changes, reconfiguring and adapting based on the given environment. It is meant for smaller devices such as the ESP32C6, a key SoC in this project.
+In simpler words, Thread is a resilient network designed to handle potentially harmful changes, reconfiguring and adapting based on the given environment. For example, if a node were to suddenly go down, the network will reconfigure to fix this issue. It is meant for smaller devices such as the ESP32C6, a key SoC in this project.
+
+We use this mesh network to ensure that a secure medium is established between devices for the sake of security, a core idea of this project.
+
+The real protocols behind the texting here isn't anything new, rather it takes advantage of [UDP](https://www.cloudflare.com/learning/ddos/glossary/user-datagram-protocol-udp/), a packet often used for data transfer, whether it be videos, DNS lookups, or online gaming (yes, online gaming). Although one could argue that TCP is much more secure, I find UDP much more easier to use with the Openthread API, and more well established.
 
 ### Built With
 
@@ -109,12 +113,9 @@ Here are the commands that you can use:
 
 * `set_nickname` Sets the nickname of a peer
 * `get_nickname` Gets the peer's nickname based on their IPv6 address
-* `start_chat` Starts a chat with a peer
 * `send_message` Sends a message to a peer manually
-* `send_advert` Sends a HomeNet style advertisement to any peers
-* `stop_advert` Self explanatory, stops advertisement
-* `start_scan` Looks for any peers sending advertisements
-* `send_verfication` Sends verification code to peer to establish a connection
+* `configure_network` Configures **one** of your devices as the leader of the mesh network, though this doesn't really change anything about message sending
+* `configure_joiner` Configures **any** device as a joiner, meaning that it joins the mesh created by the device that ran the `configure_network` command
 * `turn_on_led` Turns on the onboard LED (must be configured)
 * `turn_off_led` Turns off the onboard LED (must be configured)
 
@@ -126,7 +127,7 @@ As of now I would like to implement/am in the progress of implementing:
 * [x] Create basic messaging w/ commands
 * [x] Create custom method for anyone to advertise their presence to other instances of HomeNet
 * [x] Allow the saving of clients like phone contacts
-* [ ] Allow communication with these saved clients like DMs
+* [ ] Allow direct communication with these saved clients like DMs
 * [x] Establish a method to ensure the security of the connection
 * [ ] (Maybe) Make an application that communicates with the ESP over BLE to send messages
 

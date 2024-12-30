@@ -112,6 +112,8 @@ void udp_create_rx(otInstance *aInstance, otUdpReceiver *receiver, otSockAddr *a
     return;
 }
 
+// quick hack to remove that annoying warning
+static void send_udp(otInstance *aInstance, uint16_t port, uint16_t destPort, otUdpSocket *aSocket, otMessage *aMessage, otMessageInfo *aMessageInfo) __attribute__ ((__unused__));
 static void send_udp(otInstance *aInstance, uint16_t port, uint16_t destPort, otUdpSocket *aSocket, otMessage *aMessage, otMessageInfo *aMessageInfo)
 {
     otError error = otUdpSend(aInstance, aSocket, aMessage, aMessageInfo);
@@ -136,6 +138,7 @@ static void send_message(otInstance *aInstance, const char *aBuf, otIp6Address *
     // convert the address to a string
     otIp6AddressToString(destAddr, addrStr, sizeof(addrStr));
     snprintf(command, sizeof(command), "udp send %s %u %s", addrStr, UDP_PORT, aBuf);
+    printf("Sending command: %s\n", command);
 
     // lazy hack to send a message
     otCliInputLine(command);

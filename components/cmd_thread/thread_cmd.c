@@ -37,6 +37,7 @@
 #include "openthread/cli.h"
 #include "openthread/platform/misc.h"
 #include "openthread/thread.h"
+#include "openthread/thread_ftd.h"
 #include "openthread/diag.h"
 #include "esp_netif.h"
 #include "esp_netif_types.h"
@@ -85,8 +86,7 @@ uint64_t magic_num = 0x48616E616B6F;
 otError handle_error(otError error);
 void handle_message_error(otMessage *aMessage, otError error);
 
-void random_ipv6_addr(otInstance *aInstance);
-otIp6Address get_ipv6_address(void);
+otIp6Address *get_ipv6_address(void);
 
 otUdpSocket init_ot_udp_socket(otUdpSocket aSocket, otSockAddr aSockName);
 otSockAddr init_ot_sock_addr(otSockAddr aSockName);
@@ -126,65 +126,18 @@ void handle_message_error(otMessage *aMessage, otError error) {
 }
 
 /**
- * Generate a random ID to use when communicating 
- * with another client
- */
-void random_ipv6_addr(otInstance *aInstance)
-{
-    // create an instance of the address
-    otNetifAddress addr;
-    memset(&addr, 0, sizeof(addr));
-
-
-    // set as a local address
-    addr.mAddress.mFields.m8[0] = 0xfd;
-
-    // generate first 5 random bytes
-    for (int i = 1; i < 6; i++) 
-    {
-        addr.mAddress.mFields.m8[i] = esp_random() & 0xff;
-    }
-
-    // fill up the remaining fields with randomness
-    for (int i = 6; i < 16; i++) 
-    {
-        addr.mAddress.mFields.m8[i] = esp_random() & 0xff;
-    }
-
-    // set prefix length
-    addr.mPrefixLength = 48;
-    addr.mPreferred = true;
-    addr.mValid = true;
-    
-    // add to thread
-    otIp6AddUnicastAddress(aInstance, &addr);
-
-    char addrStr[40];
-    otIp6AddressToString(&addr.mAddress, addrStr, sizeof(addrStr));
-    printf("Generated IPv6 Address: %s\n", addrStr);
-}
-
-/**
  * Gets current ipv6 address to be used for other structures or functions
  */
-otIp6Address get_ipv6_address()
+otIp6Address *get_ipv6_address()
 {
-    // get local eid instead
-    const otIp6Address *addr = {0};
+    // get local ml-eid
+    const otIp6Address *addr = otThreadGetMeshLocalEid(esp_openthread_get_instance());
 
-    // all zeroed address if it's null
-    if (addr == NULL)
-    {
-        otIp6Address unspecifAddr = {0};
-        return unspecifAddr;
-    }
-
-    // copy over because i don't trust it
-    otIp6Address ipAddr;
-    memcpy(&ipAddr, addr, sizeof(ipAddr));
+    otIp6Address *addrCopy;
+    memcpy(&addrCopy, &addr, sizeof(addr));
 
     // return copied
-    return ipAddr;
+    return addrCopy;
 }
 
 /**
@@ -222,8 +175,8 @@ otSockAddr init_ot_sock_addr(otSockAddr aSockName)
     // reset
     memset(&aSockName, 0, sizeof(aSockName));
 
-    otIp6Address ipv6Addr = get_ipv6_address();
-    aSockName.mAddress = ipv6Addr;
+    otIp6Address *ipv6Addr = get_ipv6_address();
+    aSockName.mAddress = *ipv6Addr;
     aSockName.mPort = UDP_PORT;
 
     return aSockName;
@@ -349,6 +302,12 @@ static void configure_network(void)
 
     otDatasetSetActive(aInstance, &dataset);
 
+    otIp6Address *addr = get_ipv6_address();
+    char addrStr[OT_IP6_ADDRESS_STRING_SIZE];
+    otIp6AddressToString(addr, addrStr, sizeof(addrStr));
+    printf("Mesh Local EID: %s\n", addrStr);
+    printf("Copy this address to the other device to send a message!\n");
+
     otCliInputLine("udp open");
     otCliInputLine("udp bind :: 1602");
 }
@@ -376,9 +335,18 @@ static void configure_joiner(void)
 
     otDatasetSetActive(aInstance, &dataset);
 
+    otThreadSetRouterEligible(aInstance, false);
+
     otThreadSetEnabled(aInstance, true);
 
+    otIp6Address *addr = get_ipv6_address();
+    char addrStr[OT_IP6_ADDRESS_STRING_SIZE];
+    otIp6AddressToString(addr, addrStr, sizeof(addrStr));
+    printf("Mesh Local EID: %s\n", addrStr);
+    printf("Copy this address to the other device to send a message!\n");
+
     otCliInputLine("udp open");
+    otCliInputLine("udp bind :: 1602");
 }
 
 static otError configure_network_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
@@ -447,17 +415,6 @@ void register_thread(void)
     otIp6SetEnabled(aInstance, true);
     otLinkSetEnabled(aInstance, true);
     esp_openthread_lock_release();
-
-    // generate a random ipv6 address
-    random_ipv6_addr(aInstance);
-
-    otSockAddr aSockName;
-    otUdpSocket aSocket;
-    otMessageInfo aMessageInfo;
-    
-    aSockName = init_ot_sock_addr(aSockName);
-    aSocket = init_ot_udp_socket(aSocket, aSockName);
-    aMessageInfo = init_ot_message_info(aMessageInfo, aSocket);
 
     register_udp();
 
