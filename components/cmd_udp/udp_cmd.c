@@ -204,10 +204,7 @@ otError send_message_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
 
     // initialize the UDP socket
     otUdpSocket aSocket;
-    otSockAddr aSockName;
-
-    aSockName.mPort = UDP_PORT;
-    aSockName.mAddress = *otThreadGetMeshLocalEid(aInstance);
+    otSockAddr aSockName = init_ot_sock_addr(aSockName);
     udp_create_socket(&aSocket, aInstance, &aSockName);
 
     // create the message
@@ -232,13 +229,8 @@ otError send_message_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
     }
 
     // prepare the message info
-    otMessageInfo aMessageInfo;
-
-    memset(&aMessageInfo, 0, sizeof(aMessageInfo));
+    otMessageInfo aMessageInfo = init_ot_message_info(aMessageInfo, aSockName);
     aMessageInfo.mPeerAddr = destAddr;
-    aMessageInfo.mSockAddr = aSockName.mAddress;
-    aMessageInfo.mPeerPort = UDP_PORT;
-    aMessageInfo.mSockPort = UDP_PORT;
 
     // send it
     send_udp(aInstance, UDP_PORT, UDP_PORT, &aSocket, aMessage, &aMessageInfo);

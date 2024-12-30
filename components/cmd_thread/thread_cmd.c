@@ -90,7 +90,7 @@ otIp6Address *get_ipv6_address(void);
 
 otUdpSocket init_ot_udp_socket(otUdpSocket aSocket, otSockAddr aSockName);
 otSockAddr init_ot_sock_addr(otSockAddr aSockName);
-otMessageInfo init_ot_message_info(otMessageInfo aMessageInfo, otUdpSocket aSocket);
+otMessageInfo init_ot_message_info(otMessageInfo aMessageInfo, otSockAddr aSockName);
 otUdpReceiver init_ot_udp_receiver(otUdpReceiver aReceiver);
 otUdpSocket *ot_udp_socket_to_ptr(otUdpSocket aSocket, otUdpSocket *aSocketPtr);
 otSockAddr *ot_sock_addr_to_ptr(otSockAddr aSockName, otSockAddr *aSockNamePtr);
@@ -175,8 +175,7 @@ otSockAddr init_ot_sock_addr(otSockAddr aSockName)
     // reset
     memset(&aSockName, 0, sizeof(aSockName));
 
-    otIp6Address *ipv6Addr = get_ipv6_address();
-    aSockName.mAddress = *ipv6Addr;
+    aSockName.mAddress = *otThreadGetMeshLocalEid(esp_openthread_get_instance());
     aSockName.mPort = UDP_PORT;
 
     return aSockName;
@@ -185,14 +184,14 @@ otSockAddr init_ot_sock_addr(otSockAddr aSockName)
 /**
  * Initializes aMessageInfo
  */
-otMessageInfo init_ot_message_info(otMessageInfo aMessageInfo, otUdpSocket aSocket)
+otMessageInfo init_ot_message_info(otMessageInfo aMessageInfo, otSockAddr aSockName)
 {
     // reset
     memset(&aMessageInfo, 0, sizeof(aMessageInfo));
 
-    aMessageInfo.mSockAddr = aSocket.mSockName.mAddress;
-    aMessageInfo.mSockPort = aSocket.mSockName.mPort;
-    otIp6AddressFromString("ff03::1", &aMessageInfo.mPeerAddr);
+    // aMessageInfo.mPeerAddr must be manually set!
+    aMessageInfo.mSockAddr = aSockName.mAddress;
+    aMessageInfo.mSockPort = UDP_PORT;
     aMessageInfo.mPeerPort = UDP_PORT;
     aMessageInfo.mHopLimit = 0;
     aMessageInfo.mAllowZeroHopLimit = 0;

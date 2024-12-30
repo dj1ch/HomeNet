@@ -18,7 +18,7 @@ otIp6Address *get_ipv6_address(void);
 
 otUdpSocket init_ot_udp_socket(otUdpSocket aSocket, otSockAddr aSockName);
 otSockAddr init_ot_sock_addr(otSockAddr aSockName);
-otMessageInfo init_ot_message_info(otMessageInfo aMessageInfo, otUdpSocket aSocket);
+otMessageInfo init_ot_message_info(otMessageInfo aMessageInfo, otSockAddr aSockName);
 otUdpReceiver init_ot_udp_receiver(otUdpReceiver aReceiver);
 otUdpSocket *ot_udp_socket_to_ptr(otUdpSocket aSocket, otUdpSocket *aSocketPtr);
 otSockAddr *ot_sock_addr_to_ptr(otSockAddr aSockName, otSockAddr *aSockNamePtr);
