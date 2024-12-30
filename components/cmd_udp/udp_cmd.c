@@ -163,7 +163,7 @@ otError send_message_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
     otInstance *aInstance = esp_openthread_get_instance();
 
     // check if the correct number of arguments is passed
-    if (aArgsLength != 2)
+    if (aArgsLength < 2)
     {
         printf("Usage: send_message <message> <ipv6_addr>\n");
         return OT_ERROR_INVALID_ARGS;
@@ -171,11 +171,35 @@ otError send_message_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
 
     // conversions
     otIp6Address destAddr;
-    otError err = otIp6AddressFromString(aArgs[1], &destAddr);
+    otError err = otIp6AddressFromString(aArgs[aArgsLength - 1], &destAddr);
     if (err != OT_ERROR_NONE)
     {
-        printf("Invalid IPv6 address: %s\n", aArgs[1]);
+        printf("Invalid IPv6 address: %s\n", aArgs[aArgsLength - 1]);
         return err;
+    }
+
+    // create into one string
+    size_t messageLength = 0;
+    for (uint8_t i = 0; i < aArgsLength - 1; i++)
+    {
+        messageLength += strlen(aArgs[i]) + 1; // +1 for space or null terminator
+    }
+
+    char *message = (char *)malloc(messageLength);
+    if (message == NULL)
+    {
+        printf("Failed to allocate memory for message\n");
+        return OT_ERROR_NO_BUFS;
+    }
+
+    message[0] = '\0';
+    for (uint8_t i = 0; i < aArgsLength - 1; i++)
+    {
+        strcat(message, aArgs[i]);
+        if (i < aArgsLength - 2)
+        {
+            strcat(message, " ");
+        }
     }
 
     // initialize the UDP socket
@@ -192,16 +216,18 @@ otError send_message_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
     {
         printf("Failed to allocate message\n");
         otUdpClose(aInstance, &aSocket);
+        free(message);
         return OT_ERROR_NO_BUFS;
     }
 
     // append the message
-    err = otMessageAppend(aMessage, aArgs[0], strlen(aArgs[0]));
+    err = otMessageAppend(aMessage, message, strlen(message));
     if (err != OT_ERROR_NONE)
     {
         printf("Failed to append message: %s\n", otThreadErrorToString(err));
         otMessageFree(aMessage);
         otUdpClose(aInstance, &aSocket);
+        free(message);
         return err;
     }
 
@@ -220,7 +246,8 @@ otError send_message_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
     // close the socket
     otUdpClose(aInstance, &aSocket);
 
-    printf("Sent message \"%s\" to destination %s\n", aArgs[0], aArgs[1]);
+    printf("Sent message \"%s\" to destination %s\n", message, aArgs[aArgsLength - 1]);
+    free(message);
     return OT_ERROR_NONE;
 }
 
