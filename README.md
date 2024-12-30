@@ -20,7 +20,7 @@
     <a href="https://github.com/dj1ch/HomeNet"><strong>Explore the docs »</strong></a>
     <br />
     <br />
-    <a href="https://github.com/dj1ch/HomeNet">View Demo(TBA)</a>
+    <a href="https://youtu.be/0GrTWAWUdIw">View Demo</a>
     ·
     <a href="https://github.com/dj1ch/HomeNet/issues">Report Bug</a>
     ·
@@ -111,8 +111,9 @@ idf.py flash
 
 Here are the commands that you can use:
 
-* `set_nickname` Sets the nickname of a peer
-* `get_nickname` Gets the peer's nickname based on their IPv6 address
+* `set_nickname` Sets the nickname of a peer (WIP)
+* `get_nickname` Gets the peer's nickname based on their IPv6 address (WIP)
+* `get_ipv6` Gets the peer's IPv6 address bassed on nickname (WIP)
 * `send_message` Sends a message to a peer manually
 * `configure_network` Configures **one** of your devices as the leader of the mesh network, though this doesn't really change anything about message sending
 * `configure_joiner` Configures **any** device as a joiner, meaning that it joins the mesh created by the device that ran the `configure_network` command
