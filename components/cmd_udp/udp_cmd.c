@@ -35,6 +35,28 @@
 #define NETWORK_CHANNEL 15
 #define TAG "homenet"
 
+/**
+ * Send command to openthread CLI instead of using otCLiInputLine
+ * 
+ * Source: https://github.com/nanoframework/nf-interpreter/blob/66244e0a10cf4340e88094357098d6ab397b7fc1/targets/ESP32/_Network/NF_ESP32_OpenThread.cpp#L331
+ */
+static void ot_cli_input(const char *inputLine)
+{
+    // Need to take a copy of inputLine as otCliInputLine modifies the line when parsing
+    int length = strlen(inputLine);
+    char *cliLine = (char *)malloc(length + 1);
+    if (cliLine == NULL)
+    {
+        // Handle memory allocation failure
+        return;
+    }
+    strcpy(cliLine, inputLine);
+
+    otCliInputLine(cliLine);
+
+    free(cliLine);
+}
+
 void udp_create_socket(otUdpSocket *aSocket,
                      otInstance *aInstance,
                      otSockAddr *aSockName)
@@ -127,6 +149,19 @@ static void send_udp(otInstance *aInstance, uint16_t port, uint16_t destPort, ot
     return;
 }
 
+static void send_command(const char *command)
+{
+    // this might seem a bit stupid, but this is the only way to get this to work...
+    const char *constCommands[] = {
+        command,
+    };
+
+    for (int i = 0; i < 1; i++)
+    {
+        ot_cli_input(constCommands[i]);
+    }
+}
+
 /**
  * Send a message!
  */
@@ -140,8 +175,10 @@ static void send_message(otInstance *aInstance, const char *aBuf, otIp6Address *
     snprintf(command, sizeof(command), "udp send %s %u %s", addrStr, UDP_PORT, aBuf);
     printf("Sending command: %s\n", command);
 
+    const char *constCommand = command;
+
     // lazy hack to send a message
-    otCliInputLine(command);
+    send_command(constCommand);
 }
 
 /**
@@ -177,5 +214,13 @@ otError send_message_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
 
 void register_udp()
 {
-    printf("doing nothing\n");
+    const char *udpCmds[] = {
+        "udp open",
+        "udp bind :: 1602"
+    };
+
+    for (int i = 0; i < 2; i++)
+    {
+        ot_cli_input(udpCmds[i]);
+    }
 }

@@ -307,9 +307,6 @@ static void configure_network(void)
     otIp6AddressToString(addr, addrStr, sizeof(addrStr));
     printf("Mesh Local EID: %s\n", addrStr);
     printf("Copy this address to the other device to send a message!\n");
-
-    otCliInputLine("udp open");
-    otCliInputLine("udp bind :: 1602");
 }
 
 static void configure_joiner(void)
@@ -344,9 +341,6 @@ static void configure_joiner(void)
     otIp6AddressToString(addr, addrStr, sizeof(addrStr));
     printf("Mesh Local EID: %s\n", addrStr);
     printf("Copy this address to the other device to send a message!\n");
-
-    otCliInputLine("udp open");
-    otCliInputLine("udp bind :: 1602");
 }
 
 static otError configure_network_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
