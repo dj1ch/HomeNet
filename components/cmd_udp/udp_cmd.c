@@ -134,8 +134,6 @@ void udp_create_rx(otInstance *aInstance, otUdpReceiver *receiver, otSockAddr *a
     return;
 }
 
-// quick hack to remove that annoying warning
-static void send_udp(otInstance *aInstance, uint16_t port, uint16_t destPort, otUdpSocket *aSocket, otMessage *aMessage, otMessageInfo *aMessageInfo) __attribute__ ((__unused__));
 static void send_udp(otInstance *aInstance, uint16_t port, uint16_t destPort, otUdpSocket *aSocket, otMessage *aMessage, otMessageInfo *aMessageInfo)
 {
     otError error = otUdpSend(aInstance, aSocket, aMessage, aMessageInfo);
@@ -149,36 +147,12 @@ static void send_udp(otInstance *aInstance, uint16_t port, uint16_t destPort, ot
     return;
 }
 
-static void send_command(const char *command)
+void send_commands(const char *commands[], int numCommands)
 {
-    // this might seem a bit stupid, but this is the only way to get this to work...
-    const char *constCommands[] = {
-        command,
-    };
-
-    for (int i = 0; i < 1; i++)
+    for (int i = 0; i < numCommands; i++)
     {
-        ot_cli_input(constCommands[i]);
+        ot_cli_input(commands[i]);
     }
-}
-
-/**
- * Send a message!
- */
-static void send_message(otInstance *aInstance, const char *aBuf, otIp6Address *destAddr)
-{
-    char command[256];
-    char addrStr[OT_IP6_ADDRESS_STRING_SIZE];
-
-    // convert the address to a string
-    otIp6AddressToString(destAddr, addrStr, sizeof(addrStr));
-    snprintf(command, sizeof(command), "udp send %s %u %s", addrStr, UDP_PORT, aBuf);
-    printf("Sending command: %s\n", command);
-
-    const char *constCommand = command;
-
-    // lazy hack to send a message
-    send_command(constCommand);
 }
 
 /**
@@ -192,23 +166,61 @@ otError send_message_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
     if (aArgsLength != 2)
     {
         printf("Usage: send_message <message> <ipv6_addr>\n");
-        return OT_ERROR_FAILED;
+        return OT_ERROR_INVALID_ARGS;
     }
 
     // conversions
-    const char *aBuf = aArgs[0];
     otIp6Address destAddr;
     otError err = otIp6AddressFromString(aArgs[1], &destAddr);
     if (err != OT_ERROR_NONE)
     {
         printf("Invalid IPv6 address: %s\n", aArgs[1]);
-        return OT_ERROR_FAILED;
+        return err;
     }
 
-    // send the message
-    send_message(aInstance, aBuf, &destAddr);
+    // initialize the UDP socket
+    otUdpSocket aSocket;
+    otSockAddr aSockName;
 
-    printf("Sent message \"%s\" to destination %s\n", aBuf, aArgs[1]);
+    aSockName.mPort = UDP_PORT;
+    aSockName.mAddress = *otThreadGetMeshLocalEid(aInstance);
+    udp_create_socket(&aSocket, aInstance, &aSockName);
+
+    // create the message
+    otMessage *aMessage = otUdpNewMessage(aInstance, NULL);
+    if (aMessage == NULL)
+    {
+        printf("Failed to allocate message\n");
+        otUdpClose(aInstance, &aSocket);
+        return OT_ERROR_NO_BUFS;
+    }
+
+    // append the message
+    err = otMessageAppend(aMessage, aArgs[0], strlen(aArgs[0]));
+    if (err != OT_ERROR_NONE)
+    {
+        printf("Failed to append message: %s\n", otThreadErrorToString(err));
+        otMessageFree(aMessage);
+        otUdpClose(aInstance, &aSocket);
+        return err;
+    }
+
+    // prepare the message info
+    otMessageInfo aMessageInfo;
+
+    memset(&aMessageInfo, 0, sizeof(aMessageInfo));
+    aMessageInfo.mPeerAddr = destAddr;
+    aMessageInfo.mSockAddr = aSockName.mAddress;
+    aMessageInfo.mPeerPort = UDP_PORT;
+    aMessageInfo.mSockPort = UDP_PORT;
+
+    // send it
+    send_udp(aInstance, UDP_PORT, UDP_PORT, &aSocket, aMessage, &aMessageInfo);
+
+    // close the socket
+    otUdpClose(aInstance, &aSocket);
+
+    printf("Sent message \"%s\" to destination %s\n", aArgs[0], aArgs[1]);
     return OT_ERROR_NONE;
 }
 
@@ -219,8 +231,5 @@ void register_udp()
         "udp bind :: 1602"
     };
 
-    for (int i = 0; i < 2; i++)
-    {
-        ot_cli_input(udpCmds[i]);
-    }
+    send_commands(udpCmds, 2);
 }
