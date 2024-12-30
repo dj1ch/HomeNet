@@ -48,9 +48,9 @@
 <!-- ABOUT THE PROJECT -->
 ## About The Project
 
-At the core, this is a simple P2P (ad-hoc style) mesh network created with the help of [OpenThread](https://openthread.io/), an open source version of the mesh networking system [Thread](threadgroup.org).
+At the core, this is a simple mesh network created with the help of [OpenThread](https://openthread.io/), an open source version of the mesh networking system [Thread](threadgroup.org).
 
-Thread is a low-power, low latency mesh network technology designed for Internet of Things (IoT) devices. It enabled devices to communicate **directly** (keep in mind very important) with each other, forming a resilient network with multiple paths to reach each node.
+Thread is a low-power, low latency mesh network technology designed for Internet of Things (IoT) devices. It enabled devices to communicate **directly** (keep in mind very important) or through multiple paths with each other, forming a resilient network with multiple methods to reach each node.
 
 In simpler words, Thread is a resilient network designed to handle potentially harmful changes, reconfiguring and adapting based on the given environment. For example, if a node were to suddenly go down, the network will reconfigure to fix this issue. It is meant for smaller devices such as the ESP32C6, a key SoC in this project.
 
@@ -129,6 +129,7 @@ As of now I would like to implement/am in the progress of implementing:
 * [x] Allow the saving of clients like phone contacts
 * [ ] Allow direct communication with these saved clients like DMs
 * [x] Establish a method to ensure the security of the connection
+* [ ] Rewrite UDP communication using custom receivers, transmitters, etc
 * [ ] (Maybe) Make an application that communicates with the ESP over BLE to send messages
 
 See the [open issues](https://github.com/dj1ch/HomeNet/issues) for a list of proposed features (and known issues).
@@ -164,6 +165,9 @@ Project Link: [https://github.com/dj1ch/HomeNet](https://github.com/dj1ch/HomeNe
 * [ESP32 IEEE 802.15.4 Example](https://github.com/espressif/esp-idf/blob/master/examples/ieee802154/ieee802154_cli/main/esp_ieee802154_cli.c)
 * [ESP32 Advanced Console example](https://github.com/espressif/esp-idf/tree/v5.3/examples/system/console/advanced)
 * [ESP32 Basic Console example](https://github.com/espressif/esp-idf/tree/v5.3/examples/system/console/basic)
+* [ot-send Example](https://github.com/UCSC-ThreadAscon/ot-send)
+* [ot-receive Example](https://github.com/UCSC-ThreadAscon/ot-receive)
+* [Nano Framework Interpreter](https://github.com/nanoframework/nf-interpreter)
 * And many more...!
 
 Made with :heart: by [@dj1ch](https://github.com/dj1ch)
