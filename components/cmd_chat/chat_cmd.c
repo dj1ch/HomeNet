@@ -47,7 +47,7 @@
  */
 static esp_err_t set_nickname(const char *peerAddr, const char *nickname);
 static esp_err_t get_nickname(const char *peerAddr, char *nickname, size_t len);
-static esp_err_t get_ipv6(char *nickname, char *peerAddr, size_t len);
+static esp_err_t get_ipv6(const char *nickname, char *peerAddr, size_t len);
 static esp_err_t list_nvs_entries();
 
 /**
@@ -90,6 +90,14 @@ static esp_err_t set_nickname(const char *peerAddr, const char *nickname)
     }
 
     err = nvs_set_str(handle, key, nickname);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to set string in NVS: %s", esp_err_to_name(err));
+        nvs_close(handle);
+        return err;
+    }
+
+    err = nvs_set_str(handle, nickname, key);
     if (err != ESP_OK)
     {
         ESP_LOGE(TAG, "Failed to set string in NVS: %s", esp_err_to_name(err));
@@ -147,7 +155,7 @@ static esp_err_t get_nickname(const char *peerAddr, char *nickname, size_t len)
 /**
  * Finds the ipv6 address through a nickname
  */
-static esp_err_t get_ipv6(char *nickname, char *peerAddr, size_t len)
+static esp_err_t get_ipv6(const char *nickname, char *peerAddr, size_t len)
 {
     if (!nickname || !peerAddr || len == 0)
     {
@@ -162,8 +170,7 @@ static esp_err_t get_ipv6(char *nickname, char *peerAddr, size_t len)
         return err;
     }
 
-    // Retrieve the IPv6 address using the nickname as the key
-    err = nvs_get_str(handle, nickname, NULL, &len);
+    err = nvs_get_str(handle, nickname, peerAddr, &len);
     if (err != ESP_OK)
     {
         ESP_LOGE(TAG, "Failed to get string from NVS: %s", esp_err_to_name(err));
@@ -180,6 +187,11 @@ static esp_err_t list_nvs_entries()
 {
     nvs_iterator_t it = NULL;
     esp_err_t err = nvs_entry_find(NVS_DEFAULT_PART_NAME, "storage", NVS_TYPE_ANY, &it);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to find NVS entries: %s", esp_err_to_name(err));
+        return err;
+    }
     if (it == NULL)
     {
         ESP_LOGI(TAG, "No entries found in NVS");
@@ -324,7 +336,7 @@ static esp_err_t list_nvs_entries()
         }
 
         nvs_close(handle);
-        err = nvs_entry_next(it);
+        err = nvs_entry_next(&it);
     }
 
     nvs_release_iterator(it);
@@ -399,7 +411,7 @@ otError get_ipv6_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
         return OT_ERROR_FAILED;
     }
 
-    char *nickname = aArgs[0];
+    const char *nickname = aArgs[0];
     char peerAddr[64];
     esp_err_t err = get_ipv6(nickname, peerAddr, sizeof(peerAddr));
 
