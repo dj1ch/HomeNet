@@ -9,7 +9,7 @@
 <br />
 <p align="center">
   <a href="https://github.com/dj1ch/HomeNet">
-    <img src="images/logo.png" alt="Logo" width="400" height="300">
+    <img src="https://raw.githubusercontent.com/dj1ch/HomeNet/refs/heads/main/images/logo.png" alt="Logo" width="400" height="300">
   </a>
 
   <h3 align="center">HomeNet</h3>
@@ -95,6 +95,8 @@ So the messages here can only really be seen in the mesh, if they're ever receiv
 
 **TLDR: HomeNet is a special type of network called a mesh network, with secure messaging using UDP, often used for stuff like online games.**
 
+Look interesting? Let's go to [Prerequisites](#prerequisites).
+
 ### Built With
 
 * [esp-idf@v5.3](https://github.com/espressif/esp-idf/tree/v5.3)
@@ -115,7 +117,7 @@ To get a local copy up and running follow these simple steps.
 git clone https://github.com/dj1ch/HomeNet.git
 ```
 
-2. Install `esp-idf`: Follow [documentation](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/get-started/#installation) and install version 5.3.
+2. Install `esp-idf`: Follow [documentation](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/get-started/#installation) and install version 5.3, or you can install the [VSCode extension](https://github.com/espressif/vscode-esp-idf-extension).
 
 3. Set board target
 
@@ -123,7 +125,9 @@ git clone https://github.com/dj1ch/HomeNet.git
 idf.py set-target <your_esp32*_board>
 ```
 
-If it asks that you delete the build directory or `sdkconfig`, you will need to do that to compile for that board. 
+If it asks that you delete the build directory or `sdkconfig`, you will need to do that to compile for that board.
+
+If you're using the VSCode extension you'll need to click `Open ESP-IDF Terminal` beforehand to create an `esp-idf` shell.
 
 4. Build the project
 
@@ -143,14 +147,16 @@ or you can run
 idf.py flash
 ```
 
+If you want to make things easier on yourself, you can use the VSCode Extension to select your COM Port with button `Select Port to use`, then click on the fire icon that says `ESP-IDF: Build, Flash, and Monitor`. This will do everything that has been said, assuming that you've set your board with the `Set Espressif Device Target` button.
+
 <!-- USAGE EXAMPLES -->
 ## Usage
 
 Here are the commands that you can use:
 
-* `set_nickname` Sets the nickname of a peer (WIP)
-* `get_nickname` Gets the peer's nickname based on their IPv6 address (WIP)
-* `get_ipv6` Gets the peer's IPv6 address bassed on nickname (WIP)
+* `set_nickname` Sets the nickname of a peer
+* `get_nickname` Gets the peer's nickname based on their IPv6 address
+* `get_ipv6` Gets the peer's IPv6 address bassed on nickname
 * `send_message` Sends a message to a peer manually
 * `configure_network` Configures **one** of your devices as the leader of the mesh network, though this doesn't really change anything about message sending
 * `configure_joiner` Configures **any** device as a joiner, meaning that it joins the mesh created by the device that ran the `configure_network` command
