@@ -178,7 +178,8 @@ static esp_err_t get_ipv6(char *nickname, char *peerAddr, size_t len)
  */
 static esp_err_t list_nvs_entries()
 {
-    nvs_iterator_t it = nvs_entry_find(NVS_DEFAULT_PART_NAME, "storage", NVS_TYPE_ANY, NULL);
+    nvs_iterator_t it = NULL;
+    esp_err_t err = nvs_entry_find(NVS_DEFAULT_PART_NAME, "storage", NVS_TYPE_ANY, &it);
     if (it == NULL)
     {
         ESP_LOGI(TAG, "No entries found in NVS");
@@ -323,7 +324,7 @@ static esp_err_t list_nvs_entries()
         }
 
         nvs_close(handle);
-        it = nvs_entry_next(it);
+        err = nvs_entry_next(it);
     }
 
     nvs_release_iterator(it);
