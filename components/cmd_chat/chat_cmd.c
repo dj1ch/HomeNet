@@ -48,7 +48,8 @@
 static esp_err_t set_nickname(const char *peerAddr, const char *nickname);
 static esp_err_t get_nickname(const char *peerAddr, char *nickname, size_t len);
 static esp_err_t get_ipv6(const char *nickname, char *peerAddr, size_t len);
-static esp_err_t list_nvs_entries();
+static esp_err_t get_nvs_entries();
+static esp_err_t clear_nvs_entries();
 
 /**
  * Hash function to generate a shorter key
@@ -183,7 +184,7 @@ static esp_err_t get_ipv6(const char *nickname, char *peerAddr, size_t len)
 /**
  * List all NVS key-value entries
  */
-static esp_err_t list_nvs_entries()
+static esp_err_t get_nvs_entries()
 {
     nvs_iterator_t it = NULL;
     esp_err_t err = nvs_entry_find(NVS_DEFAULT_PART_NAME, "storage", NVS_TYPE_ANY, &it);
@@ -343,6 +344,26 @@ static esp_err_t list_nvs_entries()
     return ESP_OK;
 }
 
+static esp_err_t clear_nvs_entries()
+{
+    esp_err_t err = nvs_flash_erase();
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to erase NVS: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    err = nvs_flash_init();
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to initialize NVS: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    ESP_LOGI(TAG, "NVS erased and re-initialized successfully");
+    return ESP_OK;
+}
+
 /**
  * Command to set the nickname
  */
@@ -432,8 +453,24 @@ otError get_ipv6_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
     }
 }
 
-otError list_nvs_entries_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
+otError get_nvs_entries_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
 {
-    list_nvs_entries();
+    esp_err_t err = get_nvs_entries();
+    if (err != ESP_OK)
+    {
+        printf("Failed to get NVS entries\n");
+        return OT_ERROR_FAILED;
+    }
+    return OT_ERROR_NONE;
+}
+
+otError clear_nvs_entries_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
+{
+    esp_err_t err = clear_nvs_entries();
+    if (err != ESP_OK)
+    {
+        printf("Failed to clear NVS entries\n");
+        return OT_ERROR_FAILED;
+    }
     return OT_ERROR_NONE;
 }

@@ -422,7 +422,8 @@ void register_thread(void)
         {"configure_joiner", configure_joiner_cmd},
         {"turn_on_led", turn_on_led_cmd},
         {"turn_off_led", turn_off_led_cmd},
-        {"list_nvs_entries", list_nvs_entries_cmd},
+        {"get_nvs_entries", get_nvs_entries_cmd},
+        {"clear_nvs_entries", clear_nvs_entries_cmd},
     };
     otCliSetUserCommands(kCommands, OT_ARRAY_LENGTH(kCommands), aInstance);
 #endif
