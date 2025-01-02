@@ -121,6 +121,8 @@ Here are the commands that you can use:
 * `configure_joiner` Configures **any** device as a joiner, meaning that it joins the mesh created by the device that ran the `configure_network` command
 * `turn_on_led` Turns on the onboard LED (must be configured)
 * `turn_off_led` Turns off the onboard LED (must be configured)
+* `get_nvs_entries` Lists all NVS entries
+* `clear_nvs_entries` Clears NVS entries (if any)
 
 <!-- ROADMAP -->
 ## Roadmap
@@ -133,9 +135,9 @@ As of now I would like to implement/am in the progress of implementing:
 * [ ] Allow direct communication with these saved clients like DMs
 * [x] Establish a method to ensure the security of the connection
 * [ ] Rewrite UDP communication using custom receivers, transmitters, etc
-  * [ ] Custom transmitter
+  * [x] Custom transmitter
   * [ ] Custom receiver
-* [ ] Make documentation simpler for other audiences
+* [ ] Make documentation simpler for other audiences (may need to reach out)
 * [ ] (Maybe) Make an application that communicates with the ESP over BLE to send messages
 
 See the [open issues](https://github.com/dj1ch/HomeNet/issues) for a list of proposed features (and known issues).
