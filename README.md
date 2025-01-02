@@ -76,7 +76,22 @@ Meshes are naturally a lot more secure than regular networks. Their structures, 
 
 In this secure mesh, we allow our devices to communicate with one another directly over [IPv6](https://www.cisco.com/c/en/us/solutions/ipv6/overview.html), the latest, though probably not the most convenient networking protocol to use. Addresses tend to be lengthier which allows undecillions(billion billion billions) of devices to have unique devices, while [IPv4](https://bluecatnetworks.com/glossary/what-is-ipv4/)(the one that you're used to using) can only really hold up to a couple billions.
 
-The real protocols behind the 'texting' here isn't anything new, rather it takes advantage of [UDP](https://www.cloudflare.com/learning/ddos/glossary/user-datagram-protocol-udp/), a packet often used for data transfer, whether it be videos, DNS lookups, or online gaming (yes, online gaming). Although one could argue that TCP is much more secure, I find UDP much more easier to use with the Openthread API, and more well established.
+Speaking of communication, the real protocols behind the 'texting' here in this mesh isn't anything new, rather it takes advantage of [UDP](https://www.cloudflare.com/learning/ddos/glossary/user-datagram-protocol-udp/), a packet often used for data transfer, whether it be videos, DNS lookups, or online gaming (yes, online gaming). Although one could argue that TCP is much more secure, I find UDP much more easier to use with the Openthread API, and more well established.
+
+A UDP 'connection' may look like this:
+
+```md
+          (request)
+1. Sender <-------- Receiver
+          (response)
+2. Sender --------> Receiver
+          (response)
+3. Sender --------> Receiver
+          (response)
+4. Sender --------> Receiver
+```
+
+So the messages here can only really be seen in the mesh, if they're ever received. Lucky for us, devices in this mesh are programmed to handle the data received, as well as sending it.
 
 **TLDR: HomeNet is a special type of network called a mesh network, with secure messaging using UDP, often used for stuff like online games.**
 
