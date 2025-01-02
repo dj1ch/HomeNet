@@ -9,7 +9,6 @@
 #include "openthread/udp.h"
 
 void register_thread(void);
-extern nvs_handle_t handle;
 
 otError handle_error(otError error);
 void handle_message_error(otMessage *aMessage, otError error);

@@ -40,13 +40,28 @@
 #include "nvs_flash.h"
 #include "nvs.h"
 
+#define TAG "homenet"
+
 /**
  * Function declarations
  */
 static esp_err_t set_nickname(const char *peerAddr, const char *nickname);
 static esp_err_t get_nickname(const char *peerAddr, char *nickname, size_t len);
-static esp_err_t iterate_nvs_keys(const char *nickname, char *peerAddr, size_t len);
-static esp_err_t get_ipv6(const char *nickname, char *peerAddr, size_t len);
+static esp_err_t get_ipv6(char *nickname, char *peerAddr, size_t len);
+static esp_err_t list_nvs_entries();
+
+/**
+ * Hash function to generate a shorter key
+ */
+static uint16_t hash_peer_addr(const char *peerAddr)
+{
+    uint16_t hash = 0;
+    while (*peerAddr)
+    {
+        hash = (hash << 5) - hash + (uint8_t)(*peerAddr++);
+    }
+    return hash;
+}
 
 /**
  * Set the nickname of a discovered client
@@ -56,17 +71,43 @@ static esp_err_t set_nickname(const char *peerAddr, const char *nickname)
 {
     if (!peerAddr || !nickname)
     {
+        ESP_LOGE(TAG, "Invalid arguments: peerAddr=%s, nickname=%s", peerAddr ? peerAddr : "NULL", nickname ? nickname : "NULL");
         return ESP_ERR_INVALID_ARG;
     }
 
+    ESP_LOGI(TAG, "Setting nickname: peerAddr=%s, nickname=%s", peerAddr, nickname);
+
+    // generate a shorter key using the hash function
+    char key[16];
+    snprintf(key, sizeof(key), "%04x", hash_peer_addr(peerAddr));
+
+    nvs_handle_t handle;
     esp_err_t err = nvs_open("storage", NVS_READWRITE, &handle);
-    if (err == ESP_OK) {
-        err = nvs_set_str(handle, peerAddr, nickname);
-        if (err == ESP_OK) {
-            err = nvs_commit(handle);
-        }
-        nvs_close(handle);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to open NVS handle: %s", esp_err_to_name(err));
+        return err;
     }
+
+    err = nvs_set_str(handle, key, nickname);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to set string in NVS: %s", esp_err_to_name(err));
+        nvs_close(handle);
+        return err;
+    }
+
+    err = nvs_commit(handle);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to commit NVS handle: %s", esp_err_to_name(err));
+    }
+    else
+    {
+        ESP_LOGI(TAG, "Nickname set successfully");
+    }
+
+    nvs_close(handle);
     return err;
 }
 
@@ -75,65 +116,218 @@ static esp_err_t set_nickname(const char *peerAddr, const char *nickname)
  */
 static esp_err_t get_nickname(const char *peerAddr, char *nickname, size_t len)
 {
-    if (!peerAddr || !nickname || len == 0)
+    if (!peerAddr || !nickname)
     {
+        ESP_LOGE(TAG, "Invalid arguments");
         return ESP_ERR_INVALID_ARG;
     }
 
+    // generate a shorter key using the hash function
+    char key[16];
+    snprintf(key, sizeof(key), "%04x", hash_peer_addr(peerAddr));
+
+    nvs_handle_t handle;
     esp_err_t err = nvs_open("storage", NVS_READONLY, &handle);
-    if (err == ESP_OK)
+    if (err != ESP_OK)
     {
-        err = nvs_get_str(handle, peerAddr, nickname, &len);
-        nvs_close(handle);
+        ESP_LOGE(TAG, "Failed to open NVS handle: %s", esp_err_to_name(err));
+        return err;
     }
+
+    err = nvs_get_str(handle, key, nickname, &len);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to get string from NVS: %s", esp_err_to_name(err));
+    }
+
+    nvs_close(handle);
     return err;
 }
 
 /**
- * Does a search through NVS to find an ipv6 address given a nickname
- * Keep in mind the nickname and NVS are stored using a method
- * which has the address set as the key, then the value set as the nickname
- */
-static esp_err_t iterate_nvs_keys(const char *nickname, char *peerAddr, size_t len)
-{
-    nvs_iterator_t it;
-    esp_err_t err = nvs_entry_find(NVS_DEFAULT_PART_NAME, "storage", NVS_TYPE_STR, &it);
-
-    // check if the iterator matches the requested address
-    while (it != NULL)
-    {
-        nvs_entry_info_t info;
-        nvs_entry_info(it, &info);
-        if (strcmp(info.key, nickname) == 0)
-        {
-            err = nvs_get_str(handle, info.key, peerAddr, &len);
-            nvs_release_iterator(it);
-            return err;
-        }
-        err = nvs_entry_next(&it);
-        if (err != ESP_OK) break;
-    }
-    return ESP_ERR_NOT_FOUND;
-}
-
-
-/**
  * Finds the ipv6 address through a nickname
  */
-static esp_err_t get_ipv6(const char *nickname, char *peerAddr, size_t len)
+static esp_err_t get_ipv6(char *nickname, char *peerAddr, size_t len)
 {
     if (!nickname || !peerAddr || len == 0)
     {
         return ESP_ERR_INVALID_ARG;
     }
+
+    nvs_handle_t handle;
     esp_err_t err = nvs_open("storage", NVS_READONLY, &handle);
     if (err != ESP_OK)
     {
+        ESP_LOGE(TAG, "Failed to open NVS handle: %s", esp_err_to_name(err));
         return err;
     }
-    esp_err_t result = iterate_nvs_keys(nickname, peerAddr, len);
+
+    // Retrieve the IPv6 address using the nickname as the key
+    err = nvs_get_str(handle, nickname, NULL, &len);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to get string from NVS: %s", esp_err_to_name(err));
+    }
+
     nvs_close(handle);
-    return result;
+    return err;
+}
+
+/**
+ * List all NVS key-value entries
+ */
+static esp_err_t list_nvs_entries()
+{
+    nvs_iterator_t it = nvs_entry_find(NVS_DEFAULT_PART_NAME, "storage", NVS_TYPE_ANY, NULL);
+    if (it == NULL)
+    {
+        ESP_LOGI(TAG, "No entries found in NVS");
+        return ESP_FAIL;
+    }
+
+    while (it != NULL)
+    {
+        nvs_entry_info_t info;
+        nvs_entry_info(it, &info);
+
+        ESP_LOGI(TAG, "Namespace: %s, Key: %s, Type: %d", info.namespace_name, info.key, info.type);
+
+        // open NVS handle to read the value
+        nvs_handle_t handle;
+        esp_err_t err = nvs_open("storage", NVS_READONLY, &handle);
+        if (err != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to open NVS handle: %s", esp_err_to_name(err));
+            nvs_release_iterator(it);
+            return err;
+        }
+
+        // Read the value based on the type
+        if (info.type == NVS_TYPE_STR)
+        {
+            size_t required_size;
+            err = nvs_get_str(handle, info.key, NULL, &required_size);
+            if (err == ESP_OK)
+            {
+                char *value = malloc(required_size);
+                if (value != NULL)
+                {
+                    err = nvs_get_str(handle, info.key, value, &required_size);
+                    if (err == ESP_OK)
+                    {
+                        ESP_LOGI(TAG, "Value: %s", value);
+                        return err;
+                    }
+                    free(value);
+                }
+            }
+        }
+        else if (info.type == NVS_TYPE_BLOB)
+        {
+            size_t required_size;
+            err = nvs_get_blob(handle, info.key, NULL, &required_size);
+            if (err == ESP_OK)
+            {
+                void *value = malloc(required_size);
+                if (value != NULL)
+                {
+                    err = nvs_get_blob(handle, info.key, value, &required_size);
+                    if (err == ESP_OK)
+                    {
+                        ESP_LOGI(TAG, "Value: (blob of size %d)", required_size);
+                        return err;
+                    }
+                    free(value);
+                }
+            }
+        }
+        else if (info.type == NVS_TYPE_U8)
+        {
+            uint8_t value;
+            err = nvs_get_u8(handle, info.key, &value);
+            if (err == ESP_OK)
+            {
+                ESP_LOGI(TAG, "Value: %u", value);
+                return err;
+            }
+        }
+        else if (info.type == NVS_TYPE_I8)
+        {
+            int8_t value;
+            err = nvs_get_i8(handle, info.key, &value);
+            if (err == ESP_OK)
+            {
+                ESP_LOGI(TAG, "Value: %" PRId8, value);
+                return err;
+            }
+        }
+        else if (info.type == NVS_TYPE_U16)
+        {
+            uint16_t value;
+            err = nvs_get_u16(handle, info.key, &value);
+            if (err == ESP_OK)
+            {
+                ESP_LOGI(TAG, "Value: %u", value);
+                return err;
+            }
+        }
+        else if (info.type == NVS_TYPE_I16)
+        {
+            int16_t value;
+            err = nvs_get_i16(handle, info.key, &value);
+            if (err == ESP_OK)
+            {
+                ESP_LOGI(TAG, "Value: %" PRId16, value);
+                return err;
+            }
+        }
+        else if (info.type == NVS_TYPE_U32)
+        {
+            uint32_t value;
+            err = nvs_get_u32(handle, info.key, &value);
+            if (err == ESP_OK)
+            {
+                ESP_LOGI(TAG, "Value: %lu", value);
+                return err;
+            }
+        }
+        else if (info.type == NVS_TYPE_I32)
+        {
+            int32_t value;
+            err = nvs_get_i32(handle, info.key, &value);
+            if (err == ESP_OK)
+            {
+                ESP_LOGI(TAG, "Value: %lu", value);
+                return err;
+            }
+        }
+        else if (info.type == NVS_TYPE_U64)
+        {
+            uint64_t value;
+            err = nvs_get_u64(handle, info.key, &value);
+            if (err == ESP_OK)
+            {
+                ESP_LOGI(TAG, "Value: %llu", value);
+                return err;
+            }
+        }
+        else if (info.type == NVS_TYPE_I64)
+        {
+            int64_t value;
+            err = nvs_get_i64(handle, info.key, &value);
+            if (err == ESP_OK)
+            {
+                ESP_LOGI(TAG, "Value: %lld", value);
+                return err;
+            }
+        }
+
+        nvs_close(handle);
+        it = nvs_entry_next(it);
+    }
+
+    nvs_release_iterator(it);
+    return ESP_OK;
 }
 
 /**
@@ -141,14 +335,14 @@ static esp_err_t get_ipv6(const char *nickname, char *peerAddr, size_t len)
  */
 otError set_nickname_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
 {
-    if (aArgsLength != 3)
+    if (aArgsLength != 2)
     {
         printf("Usage: set_nickname <peer_address> <nickname>\n");
         return OT_ERROR_FAILED;
     }
 
-    const char *peerAddr = aArgs[1];
-    const char *nickname = aArgs[2];
+    const char *peerAddr = aArgs[0];
+    const char *nickname = aArgs[1];
     esp_err_t err = set_nickname(peerAddr, nickname);
 
     if (err == ESP_OK)
@@ -158,7 +352,7 @@ otError set_nickname_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
     }
     else 
     {
-        printf("Error setting nickname '%s' for %s", nickname, peerAddr);
+        printf("Error setting nickname '%s' for %s\n", nickname, peerAddr);
         return OT_ERROR_FAILED;
     }
 }
@@ -168,13 +362,13 @@ otError set_nickname_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
  */
 otError get_nickname_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
 {
-    if (aArgsLength != 2)
+    if (aArgsLength != 1)
     {
         printf("Usage: get_nickname <peerAddr>\n");
         return OT_ERROR_FAILED;
     }
 
-    const char *peerAddr = aArgs[1];
+    const char *peerAddr = aArgs[0];
     char nickname[64];
     esp_err_t err = get_nickname(peerAddr, nickname, sizeof(nickname));
 
@@ -198,17 +392,18 @@ otError get_nickname_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
  */
 otError get_ipv6_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
 {
-    if (aArgsLength != 2)
+    if (aArgsLength != 1)
     {
         printf("Usage: get_ipv6 <nickname>\n");
         return OT_ERROR_FAILED;
     }
 
-    const char *nickname = aArgs[1];
+    char *nickname = aArgs[0];
     char peerAddr[64];
     esp_err_t err = get_ipv6(nickname, peerAddr, sizeof(peerAddr));
 
-    if (err == ESP_OK) {
+    if (err == ESP_OK)
+    {
         printf("IPv6 address for nickname '%s': %s\n", nickname, peerAddr);
         return OT_ERROR_NONE;
     }
@@ -222,4 +417,10 @@ otError get_ipv6_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
         printf("Error retrieving IPv6 address for nickname '%s': %s\n", nickname, esp_err_to_name(err));
         return OT_ERROR_FAILED;
     }
+}
+
+otError list_nvs_entries_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
+{
+    list_nvs_entries();
+    return OT_ERROR_NONE;
 }
