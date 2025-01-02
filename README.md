@@ -58,6 +58,8 @@ We use this mesh network to ensure that a secure medium is established between d
 
 The real protocols behind the texting here isn't anything new, rather it takes advantage of [UDP](https://www.cloudflare.com/learning/ddos/glossary/user-datagram-protocol-udp/), a packet often used for data transfer, whether it be videos, DNS lookups, or online gaming (yes, online gaming). Although one could argue that TCP is much more secure, I find UDP much more easier to use with the Openthread API, and more well established.
 
+**TLDR: HomeNet is a special type of network called a mesh network, with secure messaging using UDP, often used for stuff like online games.**
+
 ### Built With
 
 * [esp-idf@v5.3](https://github.com/espressif/esp-idf/tree/v5.3)
@@ -131,6 +133,9 @@ As of now I would like to implement/am in the progress of implementing:
 * [ ] Allow direct communication with these saved clients like DMs
 * [x] Establish a method to ensure the security of the connection
 * [ ] Rewrite UDP communication using custom receivers, transmitters, etc
+  * [ ] Custom transmitter
+  * [ ] Custom receiver
+* [ ] Make documentation simpler for other audiences
 * [ ] (Maybe) Make an application that communicates with the ESP over BLE to send messages
 
 See the [open issues](https://github.com/dj1ch/HomeNet/issues) for a list of proposed features (and known issues).
@@ -170,5 +175,9 @@ Project Link: [https://github.com/dj1ch/HomeNet](https://github.com/dj1ch/HomeNe
 * [ot-receive Example](https://github.com/UCSC-ThreadAscon/ot-receive)
 * [Nano Framework Interpreter](https://github.com/nanoframework/nf-interpreter)
 * And many more...!
+
+## Additional learning
+
+* []()
 
 Made with :heart: by [@dj1ch](https://github.com/dj1ch)
