@@ -52,11 +52,31 @@ At the core, this is a simple mesh network created with the help of [OpenThread]
 
 Thread is a low-power, low latency mesh network technology designed for Internet of Things (IoT) devices. It enabled devices to communicate **directly** (keep in mind very important) or through multiple paths with each other, forming a resilient network with multiple methods to reach each node.
 
+Here is a somewhat simplified example of how it might look:
+
+```md
+Device 1 <-> Device 2
+  ^            ^
+  |            |
+  v            |
+  Device 3 <----
+```
+
 In simpler words, Thread is a resilient network designed to handle potentially harmful changes, reconfiguring and adapting based on the given environment. For example, if a node were to suddenly go down, the network will reconfigure to fix this issue. It is meant for smaller devices such as the ESP32C6, a key SoC in this project.
+
+For example our network might reconfigure to look something like this:
+
+```md
+Device 1 <-> Device 2
+```
 
 We use this mesh network to ensure that a secure medium is established between devices for the sake of security, a core idea of this project.
 
-The real protocols behind the texting here isn't anything new, rather it takes advantage of [UDP](https://www.cloudflare.com/learning/ddos/glossary/user-datagram-protocol-udp/), a packet often used for data transfer, whether it be videos, DNS lookups, or online gaming (yes, online gaming). Although one could argue that TCP is much more secure, I find UDP much more easier to use with the Openthread API, and more well established.
+Meshes are naturally a lot more secure than regular networks. Their structures, like said before, have no sort of centralization, and can configure at will. There is a lot of redundancy, having the posssibility of multiple routers, commissioners, children, etc. Although this might seem inconvenient, it eliminates the reliance of one device, which could serve as a point of failure. This allows our network to prevail under **most** circumstances.
+
+In this secure mesh, we allow our devices to communicate with one another directly over [IPv6](https://www.cisco.com/c/en/us/solutions/ipv6/overview.html), the latest, though probably not the most convenient networking protocol to use. Addresses tend to be lengthier which allows undecillions(billion billion billions) of devices to have unique devices, while [IPv4](https://bluecatnetworks.com/glossary/what-is-ipv4/)(the one that you're used to using) can only really hold up to a couple billions.
+
+The real protocols behind the 'texting' here isn't anything new, rather it takes advantage of [UDP](https://www.cloudflare.com/learning/ddos/glossary/user-datagram-protocol-udp/), a packet often used for data transfer, whether it be videos, DNS lookups, or online gaming (yes, online gaming). Although one could argue that TCP is much more secure, I find UDP much more easier to use with the Openthread API, and more well established.
 
 **TLDR: HomeNet is a special type of network called a mesh network, with secure messaging using UDP, often used for stuff like online games.**
 
@@ -180,6 +200,11 @@ Project Link: [https://github.com/dj1ch/HomeNet](https://github.com/dj1ch/HomeNe
 
 ## Additional learning
 
-* []()
+* [Thread Primer: What is Thread?](https://openthread.io/guides/thread-primer)
+* [What is a mesh network?](https://support.google.com/googlenest/answer/7182746?hl=en)
+* [An introduction to IEEE STD 802.15.4](https://ieeexplore.ieee.org/document/1655947)
+* [Introduction of IEEE 802.15.4 Technology](https://www.geeksforgeeks.org/introduction-of-ieee-802-15-4-technology/)
+* [IEEE 802.15.4 Standard: a tutorial / primer](https://www.electronics-notes.com/articles/connectivity/ieee-802-15-4-wireless/basics-tutorial-primer.php)
+* [OpenThread - Espressif Documentation](https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-guides/openthread.html)
 
 Made with :heart: by [@dj1ch](https://github.com/dj1ch)
