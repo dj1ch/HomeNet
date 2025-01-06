@@ -18,8 +18,12 @@
 #include "esp_phy_init.h"
 #include "cmd_system.h"
 #include "esp_openthread.h"
+#include "esp_littlefs.h"
 
+#define BASE_PATH "/littlefs"
+#define PARTITION_LABEL "littlefs"
 #define PROMPT_STR "homenet"
+#define TAG "homenet"
 
 static void initialize_nvs(void)
 {
@@ -31,12 +35,45 @@ static void initialize_nvs(void)
     ESP_ERROR_CHECK(err);
 }
 
+static void initialize_littlefs(void)
+{
+    esp_vfs_littlefs_conf_t conf = {
+        .base_path = BASE_PATH,
+        .partition_label = PARTITION_LABEL,
+        .format_if_mount_failed = true,
+        .dont_mount = false,
+    };
+
+    esp_err_t ret = esp_vfs_littlefs_register(&conf);
+    if (ret != ESP_OK)
+    {
+            if (ret == ESP_FAIL)
+            {
+                ESP_LOGE(TAG, "Failed to mount or format filesystem");
+            }
+            else if (ret == ESP_ERR_NOT_FOUND)
+            {
+                    ESP_LOGE(TAG, "Failed to find LittleFS partition");
+            }
+            else
+            {
+                ESP_LOGE(TAG, "Failed to initialize LittleFS (%s)", esp_err_to_name(ret));
+            }
+        return;
+    }
+}
+
 void app_main(void)
 {
     /**
      * Start NVS before anything
      */
     initialize_nvs();
+
+    /**
+     * Start LittleFS
+     */
+    initialize_littlefs();
 
     esp_console_repl_t *repl = NULL;
     esp_console_repl_config_t repl_config = ESP_CONSOLE_REPL_CONFIG_DEFAULT();

@@ -39,8 +39,11 @@
 #include "esp_system.h"
 #include "nvs_flash.h"
 #include "nvs.h"
+#include "esp_littlefs.h"
 
 #define TAG "homenet"
+#define BASE_PATH "/littlefs"
+#define PARTITION_LABEL "littlefs"
 
 /**
  * Function declarations
@@ -65,8 +68,8 @@ uint16_t hash_peer_addr(const char *peerAddr)
 }
 
 /**
- * Set the nickname of a discovered client
- * in the format ("peerAddr", "nickname")
+ * Set the nickname of a discovered client,
+ * where the nickname is stored as a file with the peer address in it
  */
 esp_err_t set_nickname(const char *peerAddr, const char *nickname)
 {
@@ -76,48 +79,21 @@ esp_err_t set_nickname(const char *peerAddr, const char *nickname)
         return ESP_ERR_INVALID_ARG;
     }
 
-    printf("Setting nickname: peerAddr=%s, nickname=%s\n", peerAddr, nickname);
-
-    // generate a shorter key using the hash function
-    char key[16];
-    snprintf(key, sizeof(key), "%04x", hash_peer_addr(peerAddr));
-
-    nvs_handle_t handle;
-    esp_err_t err = nvs_open("storage", NVS_READWRITE, &handle);
-    if (err != ESP_OK)
+    char path[64];
+    snprintf(path, sizeof(path), BASE_PATH, nickname);
+    
+    FILE *f = fopen(path, "w");
+    if (f == NULL)
     {
-        printf("Failed to open NVS handle: %s\n", esp_err_to_name(err));
-        return err;
+        printf("Failed to open file for writing\n");
+        return ESP_FAIL;
     }
 
-    err = nvs_set_str(handle, key, nickname);
-    if (err != ESP_OK)
-    {
-        printf("Failed to set string in NVS: %s\n", esp_err_to_name(err));
-        nvs_close(handle);
-        return err;
-    }
+    fprintf(f, "%s", peerAddr);
+    fclose(f);
 
-    err = nvs_set_str(handle, nickname, key);
-    if (err != ESP_OK)
-    {
-        printf("Failed to set string in NVS: %s\n", esp_err_to_name(err));
-        nvs_close(handle);
-        return err;
-    }
-
-    err = nvs_commit(handle);
-    if (err != ESP_OK)
-    {
-        printf("Failed to commit NVS handle: %s\n", esp_err_to_name(err));
-    }
-    else
-    {
-        printf("Nickname set successfully\n");
-    }
-
-    nvs_close(handle);
-    return err;
+    printf("Set nickname for %s as '%s'\n", peerAddr, nickname);
+    return ESP_OK;
 }
 
 /**
@@ -131,26 +107,39 @@ esp_err_t get_nickname(const char *peerAddr, char *nickname, size_t len)
         return ESP_ERR_INVALID_ARG;
     }
 
-    // generate a shorter key using the hash function
-    char key[16];
-    snprintf(key, sizeof(key), "%04x", hash_peer_addr(peerAddr));
-
-    nvs_handle_t handle;
-    esp_err_t err = nvs_open("storage", NVS_READONLY, &handle);
-    if (err != ESP_OK)
+    DIR *d = opendir(BASE_PATH);
+    if (d == NULL)
     {
-        printf("Failed to open NVS handle: %s\n", esp_err_to_name(err));
-        return err;
+        printf("Failed to open directory\n");
+        return ESP_FAIL;
     }
 
-    err = nvs_get_str(handle, key, nickname, &len);
-    if (err != ESP_OK)
+    struct dirent *entry;
+    while ((entry = readdir(d)) != NULL)
     {
-        printf("Failed to get string from NVS: %s\n", esp_err_to_name(err));
+        char path[64];
+        snprintf(path, sizeof(path), BASE_PATH, entry->d_name);
+
+        FILE *f = fopen(path, "r");
+        if (f == NULL)
+        {
+            continue;
+        }
+
+        char storedPeerAddr[64];
+        fgets(storedPeerAddr, sizeof(storedPeerAddr), f);
+        fclose(f);
+
+        if (strcmp(storedPeerAddr, peerAddr) == 0)
+        {
+            strncpy(nickname, entry->d_name, len);
+            close(d);
+            return ESP_OK;
+        }
     }
 
-    nvs_close(handle);
-    return err;
+    closedir(d);
+    return ESP_FAIL;
 }
 
 /**
@@ -163,22 +152,21 @@ esp_err_t get_ipv6(const char *nickname, char *peerAddr, size_t len)
         return ESP_ERR_INVALID_ARG;
     }
 
-    nvs_handle_t handle;
-    esp_err_t err = nvs_open("storage", NVS_READONLY, &handle);
-    if (err != ESP_OK)
+    char path[64];
+    snprintf(path, sizeof(path), BASE_PATH "/%s", nickname);
+
+    FILE *f = fopen(path, "r");
+    if (f == NULL)
     {
-        printf("Failed to open NVS handle: %s\n", esp_err_to_name(err));
-        return err;
+        printf("Nickname '%s' not found\n", nickname);
+        return ESP_FAIL;
     }
 
-    err = nvs_get_str(handle, nickname, peerAddr, &len);
-    if (err != ESP_OK)
-    {
-        printf("Failed to get string from NVS: %s\n", esp_err_to_name(err));
-    }
+    fgets(peerAddr, len, f);
+    fclose(f);
 
-    nvs_close(handle);
-    return err;
+    printf("Found IPv6 address '%s' for nickname '%s'\n", peerAddr, nickname);
+    return ESP_OK;
 }
 
 /**
@@ -186,175 +174,58 @@ esp_err_t get_ipv6(const char *nickname, char *peerAddr, size_t len)
  */
 esp_err_t get_nvs_entries()
 {
-    nvs_iterator_t it = NULL;
-    esp_err_t err = nvs_entry_find(NVS_DEFAULT_PART_NAME, "storage", NVS_TYPE_ANY, &it);
-    if (err != ESP_OK)
+    DIR *d = opendir(BASE_PATH);
+    if (d == NULL)
     {
-        printf("No entries found in NVS\n");
-        return err;
-    }
-    if (it == NULL)
-    {
-        printf("No entries found in NVS");
+        printf("Failed to open directory\n");
         return ESP_FAIL;
     }
 
-    while (it != NULL)
+    struct dirent *entry;
+    while ((entry = readdir(d)) != NULL)
     {
-        nvs_entry_info_t info;
-        nvs_entry_info(it, &info);
+        char path[64];
+        snprintf(path, sizeof(path), BASE_PATH "/%s", entry->d_name);
 
-        printf("Namespace: %s, Key: %s, Type: %d\n", info.namespace_name, info.key, info.type);
-
-        // open NVS handle to read the value
-        nvs_handle_t handle;
-        err = nvs_open("storage", NVS_READONLY, &handle);
-        if (err != ESP_OK)
+        FILE *f = fopen(path, "r");
+        if (f == NULL)
         {
-            printf("Failed to open NVS handle: %s\n", esp_err_to_name(err));
-            nvs_release_iterator(it);
-            return err;
+            continue;
         }
 
-        // Read the value based on the type
-        if (info.type == NVS_TYPE_STR)
-        {
-            size_t required_size;
-            err = nvs_get_str(handle, info.key, NULL, &required_size);
-            if (err == ESP_OK)
-            {
-                char *value = malloc(required_size);
-                if (value != NULL)
-                {
-                    err = nvs_get_str(handle, info.key, value, &required_size);
-                    if (err == ESP_OK)
-                    {
-                        printf("Value: %s\n", value);
-                    }
-                    free(value);
-                }
-            }
-        }
-        else if (info.type == NVS_TYPE_BLOB)
-        {
-            size_t required_size;
-            err = nvs_get_blob(handle, info.key, NULL, &required_size);
-            if (err == ESP_OK)
-            {
-                void *value = malloc(required_size);
-                if (value != NULL)
-                {
-                    err = nvs_get_blob(handle, info.key, value, &required_size);
-                    if (err == ESP_OK)
-                    {
-                        printf("Value: (blob of size %zu)\n", required_size);
-                    }
-                    free(value);
-                }
-            }
-        }
-        else if (info.type == NVS_TYPE_U8)
-        {
-            uint8_t value;
-            err = nvs_get_u8(handle, info.key, &value);
-            if (err == ESP_OK)
-            {
-                printf("Value: %u\n", value);
-            }
-        }
-        else if (info.type == NVS_TYPE_I8)
-        {
-            int8_t value;
-            err = nvs_get_i8(handle, info.key, &value);
-            if (err == ESP_OK)
-            {
-                printf("Value: %" PRId8 "\n", value);
-            }
-        }
-        else if (info.type == NVS_TYPE_U16)
-        {
-            uint16_t value;
-            err = nvs_get_u16(handle, info.key, &value);
-            if (err == ESP_OK)
-            {
-                printf("Value: %u\n", value);
-            }
-        }
-        else if (info.type == NVS_TYPE_I16)
-        {
-            int16_t value;
-            err = nvs_get_i16(handle, info.key, &value);
-            if (err == ESP_OK)
-            {
-                printf("Value: %" PRId16 "\n", value);
-            }
-        }
-        else if (info.type == NVS_TYPE_U32)
-        {
-            uint32_t value;
-            err = nvs_get_u32(handle, info.key, &value);
-            if (err == ESP_OK)
-            {
-                printf("Value: %" PRIu32 "\n", value);
-            }
-        }
-        else if (info.type == NVS_TYPE_I32)
-        {
-            int32_t value;
-            err = nvs_get_i32(handle, info.key, &value);
-            if (err == ESP_OK)
-            {
-                printf("Value: %" PRId32 "\n", value);
-            }
-        }
-        else if (info.type == NVS_TYPE_U64)
-        {
-            uint64_t value;
-            err = nvs_get_u64(handle, info.key, &value);
-            if (err == ESP_OK)
-            {
-                printf("Value: %" PRIu64 "\n", value);
-            }
-        }
-        else if (info.type == NVS_TYPE_I64)
-        {
-            int64_t value;
-            err = nvs_get_i64(handle, info.key, &value);
-            if (err == ESP_OK)
-            {
-                printf("Value: %" PRId64 "\n", value);
-            }
-        }
+        char peerAddr[64];
+        fgets(peerAddr, sizeof(peerAddr), f);
+        fclose(f);
 
-        nvs_close(handle);
-        err = nvs_entry_next(&it);
-        if (err != ESP_OK)
-        {
-            break;
-        }
+        printf("Nickname: %s, IPv6 Address: %s\n", entry->d_name, peerAddr);
     }
 
-    nvs_release_iterator(it);
+    closedir(d);
     return ESP_OK;
 }
 
 esp_err_t clear_nvs_entries()
 {
-    esp_err_t err = nvs_flash_erase();
-    if (err != ESP_OK)
+    DIR *d = opendir(BASE_PATH);
+    if (d == NULL)
     {
-        printf("Failed to erase NVS: %s\n", esp_err_to_name(err));
-        return err;
+        printf("Failed to open directory\n");
+        return ESP_FAIL;
     }
 
-    err = nvs_flash_init();
-    if (err != ESP_OK)
+    struct dirent *entry;
+    while ((entry = readdir(d)) != NULL)
     {
-        printf("Failed to initialize NVS: %s\n", esp_err_to_name(err));
-        return err;
+        char path[64];
+        snprintf(path, sizeof(path), BASE_PATH "/%s", entry->d_name);
+
+        if (remove(path) != 0)
+        {
+            printf("Failed to remove file: %s\n", path);
+        }
     }
 
-    printf("NVS erased and re-initialized successfully\n");
+    closedir(d);
     return ESP_OK;
 }
 

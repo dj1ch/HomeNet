@@ -182,50 +182,34 @@ otError send_message_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
         printf("Error (%s) opening NVS handle!\n", esp_err_to_name(err));
         return OT_ERROR_FAILED;
     }
+
+    char peerAddr[64];
+    size_t len = sizeof(peerAddr);
+    err = nvs_get_str(handle, aArgs[aArgsLength - 1], peerAddr, &len);
     if (err == ESP_OK)
     {
-        char peerAddr[64];
-        size_t len = sizeof(peerAddr);
-        err = nvs_get_str(handle, aArgs[aArgsLength - 1], peerAddr, &len);
-        if (err == ESP_OK)
+        printf("Found IPv6 address '%s' for nickname '%s'\n", peerAddr, aArgs[aArgsLength - 1]);
+        err = otIp6AddressFromString(peerAddr, &destAddr);
+        if (err != OT_ERROR_NONE)
         {
-            char *ipv6_addr = malloc(len);
-            if (ipv6_addr == NULL)
-            {
-                printf("Failed to allocate memory for IPv6 address\n");
-                nvs_close(handle);
-                return OT_ERROR_NO_BUFS;
-            }
-            err = nvs_get_str(handle, aArgs[aArgsLength - 1], ipv6_addr, &len);
-            if (err == ESP_OK)
-            {
-                err = otIp6AddressFromString(ipv6_addr, &destAddr);
-                free(ipv6_addr);
-            }
-            else
-            {
-                printf("Failed to get IPv6 address from NVS\n");
-                free(ipv6_addr);
-                nvs_close(handle);
-                return OT_ERROR_NOT_FOUND;
-            }
-        }
-        else
-        {
-            printf("Nickname not found in NVS, switching to command line arguement\n");
+            printf("Invalid IPv6 address: %s\n", peerAddr);
             nvs_close(handle);
-            return OT_ERROR_NOT_FOUND;
+            return err;
         }
-        nvs_close(handle);
-
+    }
+    else
+    {
+        printf("Nickname '%s' not found in NVS, switching to command line argument\n", aArgs[aArgsLength - 1]);
         err = otIp6AddressFromString(aArgs[aArgsLength - 1], &destAddr);
         if (err != OT_ERROR_NONE)
         {
             printf("Invalid IPv6 address: %s\n", aArgs[aArgsLength - 1]);
+            nvs_close(handle);
             return err;
         }
     }
-    
+    nvs_close(handle);
+
     // create into one string
     size_t messageLength = 0;
     for (uint8_t i = 0; i < aArgsLength - 1; i++)
