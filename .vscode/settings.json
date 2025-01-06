@@ -63,7 +63,8 @@
         "esp_console.h": "c",
         "*.tcc": "c",
         "nvs_flash.h": "c",
-        "esp_littlefs.h": "c"
+        "esp_littlefs.h": "c",
+        "dirent.h": "c"
     },
     "idf.espIdfPathWin": "c:\\Espressif\\containers\\v5.3\\esp-idf",
     "idf.pythonBinPathWin": "c:\\Espressif\\tools\\python_env\\idf5.3_py3.11_env\\Scripts\\python.exe",
