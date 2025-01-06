@@ -40,10 +40,10 @@
 #include "nvs_flash.h"
 #include "nvs.h"
 #include "esp_littlefs.h"
+#include <dirent.h>
 
 #define TAG "homenet"
-#define BASE_PATH "/littlefs"
-#define PARTITION_LABEL "littlefs"
+#define MAX_PATH_LENGTH 320
 
 /**
  * Function declarations
@@ -78,10 +78,9 @@ esp_err_t set_nickname(const char *peerAddr, const char *nickname)
         printf("Invalid arguments: peerAddr=%s, nickname=%s\n", peerAddr ? peerAddr : "NULL", nickname ? nickname : "NULL");
         return ESP_ERR_INVALID_ARG;
     }
+    char path[MAX_PATH_LENGTH];
+    snprintf(path, sizeof(path), "/littlefs" "/%s", nickname);
 
-    char path[64];
-    snprintf(path, sizeof(path), BASE_PATH, nickname);
-    
     FILE *f = fopen(path, "w");
     if (f == NULL)
     {
@@ -107,7 +106,7 @@ esp_err_t get_nickname(const char *peerAddr, char *nickname, size_t len)
         return ESP_ERR_INVALID_ARG;
     }
 
-    DIR *d = opendir(BASE_PATH);
+    DIR *d = opendir("/littlefs");
     if (d == NULL)
     {
         printf("Failed to open directory\n");
@@ -117,8 +116,8 @@ esp_err_t get_nickname(const char *peerAddr, char *nickname, size_t len)
     struct dirent *entry;
     while ((entry = readdir(d)) != NULL)
     {
-        char path[64];
-        snprintf(path, sizeof(path), BASE_PATH, entry->d_name);
+        char path[MAX_PATH_LENGTH];
+        snprintf(path, sizeof(path), "/littlefs" "%s", entry->d_name);
 
         FILE *f = fopen(path, "r");
         if (f == NULL)
@@ -133,7 +132,7 @@ esp_err_t get_nickname(const char *peerAddr, char *nickname, size_t len)
         if (strcmp(storedPeerAddr, peerAddr) == 0)
         {
             strncpy(nickname, entry->d_name, len);
-            close(d);
+            closedir(d);
             return ESP_OK;
         }
     }
@@ -152,8 +151,8 @@ esp_err_t get_ipv6(const char *nickname, char *peerAddr, size_t len)
         return ESP_ERR_INVALID_ARG;
     }
 
-    char path[64];
-    snprintf(path, sizeof(path), BASE_PATH "/%s", nickname);
+    char path[MAX_PATH_LENGTH];
+    snprintf(path, sizeof(path), "/littlefs" "/%s", nickname);
 
     FILE *f = fopen(path, "r");
     if (f == NULL)
@@ -174,7 +173,7 @@ esp_err_t get_ipv6(const char *nickname, char *peerAddr, size_t len)
  */
 esp_err_t get_nvs_entries()
 {
-    DIR *d = opendir(BASE_PATH);
+    DIR *d = opendir("/littlefs");
     if (d == NULL)
     {
         printf("Failed to open directory\n");
@@ -184,8 +183,8 @@ esp_err_t get_nvs_entries()
     struct dirent *entry;
     while ((entry = readdir(d)) != NULL)
     {
-        char path[64];
-        snprintf(path, sizeof(path), BASE_PATH "/%s", entry->d_name);
+        char path[MAX_PATH_LENGTH];
+        snprintf(path, sizeof(path), "/littlefs" "/%s", entry->d_name);
 
         FILE *f = fopen(path, "r");
         if (f == NULL)
@@ -206,7 +205,7 @@ esp_err_t get_nvs_entries()
 
 esp_err_t clear_nvs_entries()
 {
-    DIR *d = opendir(BASE_PATH);
+    DIR *d = opendir("/littlefs");
     if (d == NULL)
     {
         printf("Failed to open directory\n");
@@ -216,8 +215,8 @@ esp_err_t clear_nvs_entries()
     struct dirent *entry;
     while ((entry = readdir(d)) != NULL)
     {
-        char path[64];
-        snprintf(path, sizeof(path), BASE_PATH "/%s", entry->d_name);
+        char path[MAX_PATH_LENGTH];
+        snprintf(path, sizeof(path), "/littlefs" "/%s", entry->d_name);
 
         if (remove(path) != 0)
         {
