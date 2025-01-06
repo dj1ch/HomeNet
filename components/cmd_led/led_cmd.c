@@ -20,8 +20,8 @@
 #include "esp_system.h"
 #include "esp_mac.h"
 
-static esp_err_t turn_on_led(void);
-static esp_err_t turn_off_led(void);
+esp_err_t turn_on_led(void);
+esp_err_t turn_off_led(void);
 
 uint32_t LED_PIN = 7;
 bool init = false;
@@ -51,7 +51,7 @@ esp_err_t init_led(void)
 /**
  * Turns on the onboard LED
  */
-static esp_err_t turn_on_led(void)
+esp_err_t turn_on_led(void)
 {
     // double check
     if (!init)
@@ -69,7 +69,7 @@ static esp_err_t turn_on_led(void)
 /**
  * Turns off the onboard LED
  */
-static esp_err_t turn_off_led(void)
+esp_err_t turn_off_led(void)
 {
     // double check
     if (!init)

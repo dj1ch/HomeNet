@@ -1,6 +1,7 @@
 
 #include "udp_cmd.h"
 #include "thread_cmd.h"
+#include "chat_cmd.h"
 #include "openthread/tcp.h"
 #include "openthread/tcp_ext.h"
 #include "openthread/ip6.h"
@@ -40,7 +41,7 @@
  * 
  * Source: https://github.com/nanoframework/nf-interpreter/blob/66244e0a10cf4340e88094357098d6ab397b7fc1/targets/ESP32/_Network/NF_ESP32_OpenThread.cpp#L331
  */
-static void ot_cli_input(const char *inputLine)
+void ot_cli_input(const char *inputLine)
 {
     // Need to take a copy of inputLine as otCliInputLine modifies the line when parsing
     int length = strlen(inputLine);
@@ -78,11 +79,11 @@ void create_rx_socket(otInstance *aInstance,
     return;
 }
 
-static inline uint16_t get_payload_length(const otMessage *aMessage) {
+inline uint16_t get_payload_length(const otMessage *aMessage) {
     return otMessageGetLength(aMessage) - otMessageGetOffset(aMessage);
 }
 
-static void udp_get_payload(const otMessage *aMessage, void* buffer) {
+void udp_get_payload(const otMessage *aMessage, void* buffer) {
     uint16_t offset = otMessageGetOffset(aMessage);
     uint16_t length = get_payload_length(aMessage);
 
@@ -94,7 +95,7 @@ static void udp_get_payload(const otMessage *aMessage, void* buffer) {
 /**
  * UDP message recieving callback
  */
-static bool udp_msg_rcv_cb(void *aContext, const otMessage *aMessage, const otMessageInfo *aMessageInfo)
+bool udp_msg_rcv_cb(void *aContext, const otMessage *aMessage, const otMessageInfo *aMessageInfo)
 {
     uint16_t senderPort = aMessageInfo->mPeerPort;
     uint16_t receiverPort = aMessageInfo->mSockPort;
@@ -134,7 +135,7 @@ void udp_create_rx(otInstance *aInstance, otUdpReceiver *receiver, otSockAddr *a
     return;
 }
 
-static void send_udp(otInstance *aInstance, uint16_t port, uint16_t destPort, otUdpSocket *aSocket, otMessage *aMessage, otMessageInfo *aMessageInfo)
+void send_udp(otInstance *aInstance, uint16_t port, uint16_t destPort, otUdpSocket *aSocket, otMessage *aMessage, otMessageInfo *aMessageInfo)
 {
     otError error = otUdpSend(aInstance, aSocket, aMessage, aMessageInfo);
     handle_message_error(aMessage, error);
@@ -171,13 +172,60 @@ otError send_message_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
 
     // conversions
     otIp6Address destAddr;
-    otError err = otIp6AddressFromString(aArgs[aArgsLength - 1], &destAddr);
-    if (err != OT_ERROR_NONE)
-    {
-        printf("Invalid IPv6 address: %s\n", aArgs[aArgsLength - 1]);
-        return err;
-    }
+    esp_err_t err;
+    nvs_handle_t handle;
 
+    // check NVS for nickname if one is provided
+    err = nvs_open("storage", NVS_READONLY, &handle);
+    if (err != ESP_OK)
+    {
+        printf("Error (%s) opening NVS handle!\n", esp_err_to_name(err));
+        return OT_ERROR_FAILED;
+    }
+    if (err == ESP_OK)
+    {
+        char peerAddr[64];
+        size_t len = sizeof(peerAddr);
+        err = nvs_get_str(handle, aArgs[aArgsLength - 1], peerAddr, &len);
+        if (err == ESP_OK)
+        {
+            char *ipv6_addr = malloc(len);
+            if (ipv6_addr == NULL)
+            {
+                printf("Failed to allocate memory for IPv6 address\n");
+                nvs_close(handle);
+                return OT_ERROR_NO_BUFS;
+            }
+            err = nvs_get_str(handle, aArgs[aArgsLength - 1], ipv6_addr, &len);
+            if (err == ESP_OK)
+            {
+                err = otIp6AddressFromString(ipv6_addr, &destAddr);
+                free(ipv6_addr);
+            }
+            else
+            {
+                printf("Failed to get IPv6 address from NVS\n");
+                free(ipv6_addr);
+                nvs_close(handle);
+                return OT_ERROR_NOT_FOUND;
+            }
+        }
+        else
+        {
+            printf("Nickname not found in NVS, switching to command line arguement\n");
+            nvs_close(handle);
+            return OT_ERROR_NOT_FOUND;
+        }
+        nvs_close(handle);
+
+        err = otIp6AddressFromString(aArgs[aArgsLength - 1], &destAddr);
+        if (err != OT_ERROR_NONE)
+        {
+            printf("Invalid IPv6 address: %s\n", aArgs[aArgsLength - 1]);
+            return err;
+        }
+    }
+    
     // create into one string
     size_t messageLength = 0;
     for (uint8_t i = 0; i < aArgsLength - 1; i++)

@@ -45,16 +45,16 @@
 /**
  * Function declarations
  */
-static esp_err_t set_nickname(const char *peerAddr, const char *nickname);
-static esp_err_t get_nickname(const char *peerAddr, char *nickname, size_t len);
-static esp_err_t get_ipv6(const char *nickname, char *peerAddr, size_t len);
-static esp_err_t get_nvs_entries();
-static esp_err_t clear_nvs_entries();
+esp_err_t set_nickname(const char *peerAddr, const char *nickname);
+esp_err_t get_nickname(const char *peerAddr, char *nickname, size_t len);
+esp_err_t get_ipv6(const char *nickname, char *peerAddr, size_t len);
+esp_err_t get_nvs_entries();
+esp_err_t clear_nvs_entries();
 
 /**
  * Hash function to generate a shorter key
  */
-static uint16_t hash_peer_addr(const char *peerAddr)
+uint16_t hash_peer_addr(const char *peerAddr)
 {
     uint16_t hash = 0;
     while (*peerAddr)
@@ -68,15 +68,15 @@ static uint16_t hash_peer_addr(const char *peerAddr)
  * Set the nickname of a discovered client
  * in the format ("peerAddr", "nickname")
  */
-static esp_err_t set_nickname(const char *peerAddr, const char *nickname)
+esp_err_t set_nickname(const char *peerAddr, const char *nickname)
 {
     if (!peerAddr || !nickname)
     {
-        ESP_LOGE(TAG, "Invalid arguments: peerAddr=%s, nickname=%s", peerAddr ? peerAddr : "NULL", nickname ? nickname : "NULL");
+        printf("Invalid arguments: peerAddr=%s, nickname=%s\n", peerAddr ? peerAddr : "NULL", nickname ? nickname : "NULL");
         return ESP_ERR_INVALID_ARG;
     }
 
-    ESP_LOGI(TAG, "Setting nickname: peerAddr=%s, nickname=%s", peerAddr, nickname);
+    printf("Setting nickname: peerAddr=%s, nickname=%s\n", peerAddr, nickname);
 
     // generate a shorter key using the hash function
     char key[16];
@@ -86,14 +86,14 @@ static esp_err_t set_nickname(const char *peerAddr, const char *nickname)
     esp_err_t err = nvs_open("storage", NVS_READWRITE, &handle);
     if (err != ESP_OK)
     {
-        ESP_LOGE(TAG, "Failed to open NVS handle: %s", esp_err_to_name(err));
+        printf("Failed to open NVS handle: %s\n", esp_err_to_name(err));
         return err;
     }
 
     err = nvs_set_str(handle, key, nickname);
     if (err != ESP_OK)
     {
-        ESP_LOGE(TAG, "Failed to set string in NVS: %s", esp_err_to_name(err));
+        printf("Failed to set string in NVS: %s\n", esp_err_to_name(err));
         nvs_close(handle);
         return err;
     }
@@ -101,7 +101,7 @@ static esp_err_t set_nickname(const char *peerAddr, const char *nickname)
     err = nvs_set_str(handle, nickname, key);
     if (err != ESP_OK)
     {
-        ESP_LOGE(TAG, "Failed to set string in NVS: %s", esp_err_to_name(err));
+        printf("Failed to set string in NVS: %s\n", esp_err_to_name(err));
         nvs_close(handle);
         return err;
     }
@@ -109,11 +109,11 @@ static esp_err_t set_nickname(const char *peerAddr, const char *nickname)
     err = nvs_commit(handle);
     if (err != ESP_OK)
     {
-        ESP_LOGE(TAG, "Failed to commit NVS handle: %s", esp_err_to_name(err));
+        printf("Failed to commit NVS handle: %s\n", esp_err_to_name(err));
     }
     else
     {
-        ESP_LOGI(TAG, "Nickname set successfully");
+        printf("Nickname set successfully\n");
     }
 
     nvs_close(handle);
@@ -123,11 +123,11 @@ static esp_err_t set_nickname(const char *peerAddr, const char *nickname)
 /**
  * Get the requested nickname(s) from NVS
  */
-static esp_err_t get_nickname(const char *peerAddr, char *nickname, size_t len)
+esp_err_t get_nickname(const char *peerAddr, char *nickname, size_t len)
 {
     if (!peerAddr || !nickname)
     {
-        ESP_LOGE(TAG, "Invalid arguments");
+        printf("Invalid arguments\n");
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -139,14 +139,14 @@ static esp_err_t get_nickname(const char *peerAddr, char *nickname, size_t len)
     esp_err_t err = nvs_open("storage", NVS_READONLY, &handle);
     if (err != ESP_OK)
     {
-        ESP_LOGE(TAG, "Failed to open NVS handle: %s", esp_err_to_name(err));
+        printf("Failed to open NVS handle: %s\n", esp_err_to_name(err));
         return err;
     }
 
     err = nvs_get_str(handle, key, nickname, &len);
     if (err != ESP_OK)
     {
-        ESP_LOGE(TAG, "Failed to get string from NVS: %s", esp_err_to_name(err));
+        printf("Failed to get string from NVS: %s\n", esp_err_to_name(err));
     }
 
     nvs_close(handle);
@@ -156,7 +156,7 @@ static esp_err_t get_nickname(const char *peerAddr, char *nickname, size_t len)
 /**
  * Finds the ipv6 address through a nickname
  */
-static esp_err_t get_ipv6(const char *nickname, char *peerAddr, size_t len)
+esp_err_t get_ipv6(const char *nickname, char *peerAddr, size_t len)
 {
     if (!nickname || !peerAddr || len == 0)
     {
@@ -167,14 +167,14 @@ static esp_err_t get_ipv6(const char *nickname, char *peerAddr, size_t len)
     esp_err_t err = nvs_open("storage", NVS_READONLY, &handle);
     if (err != ESP_OK)
     {
-        ESP_LOGE(TAG, "Failed to open NVS handle: %s", esp_err_to_name(err));
+        printf("Failed to open NVS handle: %s\n", esp_err_to_name(err));
         return err;
     }
 
     err = nvs_get_str(handle, nickname, peerAddr, &len);
     if (err != ESP_OK)
     {
-        ESP_LOGE(TAG, "Failed to get string from NVS: %s", esp_err_to_name(err));
+        printf("Failed to get string from NVS: %s\n", esp_err_to_name(err));
     }
 
     nvs_close(handle);
@@ -184,18 +184,18 @@ static esp_err_t get_ipv6(const char *nickname, char *peerAddr, size_t len)
 /**
  * List all NVS key-value entries
  */
-static esp_err_t get_nvs_entries()
+esp_err_t get_nvs_entries()
 {
     nvs_iterator_t it = NULL;
     esp_err_t err = nvs_entry_find(NVS_DEFAULT_PART_NAME, "storage", NVS_TYPE_ANY, &it);
     if (err != ESP_OK)
     {
-        ESP_LOGE(TAG, "Failed to find NVS entries: %s", esp_err_to_name(err));
+        printf("No entries found in NVS\n");
         return err;
     }
     if (it == NULL)
     {
-        ESP_LOGI(TAG, "No entries found in NVS");
+        printf("No entries found in NVS");
         return ESP_FAIL;
     }
 
@@ -204,14 +204,14 @@ static esp_err_t get_nvs_entries()
         nvs_entry_info_t info;
         nvs_entry_info(it, &info);
 
-        ESP_LOGI(TAG, "Namespace: %s, Key: %s, Type: %d", info.namespace_name, info.key, info.type);
+        printf("Namespace: %s, Key: %s, Type: %d\n", info.namespace_name, info.key, info.type);
 
         // open NVS handle to read the value
         nvs_handle_t handle;
-        esp_err_t err = nvs_open("storage", NVS_READONLY, &handle);
+        err = nvs_open("storage", NVS_READONLY, &handle);
         if (err != ESP_OK)
         {
-            ESP_LOGE(TAG, "Failed to open NVS handle: %s", esp_err_to_name(err));
+            printf("Failed to open NVS handle: %s\n", esp_err_to_name(err));
             nvs_release_iterator(it);
             return err;
         }
@@ -229,8 +229,7 @@ static esp_err_t get_nvs_entries()
                     err = nvs_get_str(handle, info.key, value, &required_size);
                     if (err == ESP_OK)
                     {
-                        ESP_LOGI(TAG, "Value: %s", value);
-                        return err;
+                        printf("Value: %s\n", value);
                     }
                     free(value);
                 }
@@ -248,8 +247,7 @@ static esp_err_t get_nvs_entries()
                     err = nvs_get_blob(handle, info.key, value, &required_size);
                     if (err == ESP_OK)
                     {
-                        ESP_LOGI(TAG, "Value: (blob of size %d)", required_size);
-                        return err;
+                        printf("Value: (blob of size %zu)\n", required_size);
                     }
                     free(value);
                 }
@@ -261,8 +259,7 @@ static esp_err_t get_nvs_entries()
             err = nvs_get_u8(handle, info.key, &value);
             if (err == ESP_OK)
             {
-                ESP_LOGI(TAG, "Value: %u", value);
-                return err;
+                printf("Value: %u\n", value);
             }
         }
         else if (info.type == NVS_TYPE_I8)
@@ -271,8 +268,7 @@ static esp_err_t get_nvs_entries()
             err = nvs_get_i8(handle, info.key, &value);
             if (err == ESP_OK)
             {
-                ESP_LOGI(TAG, "Value: %" PRId8, value);
-                return err;
+                printf("Value: %" PRId8 "\n", value);
             }
         }
         else if (info.type == NVS_TYPE_U16)
@@ -281,8 +277,7 @@ static esp_err_t get_nvs_entries()
             err = nvs_get_u16(handle, info.key, &value);
             if (err == ESP_OK)
             {
-                ESP_LOGI(TAG, "Value: %u", value);
-                return err;
+                printf("Value: %u\n", value);
             }
         }
         else if (info.type == NVS_TYPE_I16)
@@ -291,8 +286,7 @@ static esp_err_t get_nvs_entries()
             err = nvs_get_i16(handle, info.key, &value);
             if (err == ESP_OK)
             {
-                ESP_LOGI(TAG, "Value: %" PRId16, value);
-                return err;
+                printf("Value: %" PRId16 "\n", value);
             }
         }
         else if (info.type == NVS_TYPE_U32)
@@ -301,8 +295,7 @@ static esp_err_t get_nvs_entries()
             err = nvs_get_u32(handle, info.key, &value);
             if (err == ESP_OK)
             {
-                ESP_LOGI(TAG, "Value: %lu", value);
-                return err;
+                printf("Value: %" PRIu32 "\n", value);
             }
         }
         else if (info.type == NVS_TYPE_I32)
@@ -311,8 +304,7 @@ static esp_err_t get_nvs_entries()
             err = nvs_get_i32(handle, info.key, &value);
             if (err == ESP_OK)
             {
-                ESP_LOGI(TAG, "Value: %lu", value);
-                return err;
+                printf("Value: %" PRId32 "\n", value);
             }
         }
         else if (info.type == NVS_TYPE_U64)
@@ -321,8 +313,7 @@ static esp_err_t get_nvs_entries()
             err = nvs_get_u64(handle, info.key, &value);
             if (err == ESP_OK)
             {
-                ESP_LOGI(TAG, "Value: %llu", value);
-                return err;
+                printf("Value: %" PRIu64 "\n", value);
             }
         }
         else if (info.type == NVS_TYPE_I64)
@@ -331,36 +322,39 @@ static esp_err_t get_nvs_entries()
             err = nvs_get_i64(handle, info.key, &value);
             if (err == ESP_OK)
             {
-                ESP_LOGI(TAG, "Value: %lld", value);
-                return err;
+                printf("Value: %" PRId64 "\n", value);
             }
         }
 
         nvs_close(handle);
         err = nvs_entry_next(&it);
+        if (err != ESP_OK)
+        {
+            break;
+        }
     }
 
     nvs_release_iterator(it);
     return ESP_OK;
 }
 
-static esp_err_t clear_nvs_entries()
+esp_err_t clear_nvs_entries()
 {
     esp_err_t err = nvs_flash_erase();
     if (err != ESP_OK)
     {
-        ESP_LOGE(TAG, "Failed to erase NVS: %s", esp_err_to_name(err));
+        printf("Failed to erase NVS: %s\n", esp_err_to_name(err));
         return err;
     }
 
     err = nvs_flash_init();
     if (err != ESP_OK)
     {
-        ESP_LOGE(TAG, "Failed to initialize NVS: %s", esp_err_to_name(err));
+        printf("Failed to initialize NVS: %s\n", esp_err_to_name(err));
         return err;
     }
 
-    ESP_LOGI(TAG, "NVS erased and re-initialized successfully");
+    printf("NVS erased and re-initialized successfully\n");
     return ESP_OK;
 }
 

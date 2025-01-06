@@ -1,6 +1,7 @@
 #pragma once
 
 #include "openthread/error.h"
+#include "esp_types.h"
 
 otError set_nickname_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]);
 otError get_nickname_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]);

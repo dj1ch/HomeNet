@@ -98,11 +98,11 @@ otMessageInfo *ot_message_info_to_ptr(otMessageInfo aMessageInfo, otMessageInfo 
 otMessageInfo *const_ptr_ot_message_info_to_ptr(const otMessageInfo *aMessageInfo, otMessageInfo *aMessageInfoPtr);
 otUdpReceiver *ot_udp_receiver_to_ptr(otUdpReceiver aReceiver, otUdpReceiver *aReceiverPtr);
 
-static void configure_network(void);
-static void configure_joiner(void);
+void configure_network(void);
+void configure_joiner(void);
 
-static otError configure_network_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]);
-static otError configure_joiner_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]);
+otError configure_network_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]);
+otError configure_joiner_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]);
 
 void register_thread(void);
 
@@ -258,7 +258,7 @@ otUdpReceiver *ot_udp_receiver_to_ptr(otUdpReceiver aReceiver, otUdpReceiver *aR
 /**
  * Properly configures the network for use. May use TCP as well in the future
  */
-static void configure_network(void)
+void configure_network(void)
 {
     otInstance *aInstance = esp_openthread_get_instance();
 
@@ -303,7 +303,7 @@ static void configure_network(void)
     printf("Copy this address to the other device to send a message!\n");
 }
 
-static void configure_joiner(void)
+void configure_joiner(void)
 {
     otInstance *aInstance = esp_openthread_get_instance();
 
@@ -337,14 +337,14 @@ static void configure_joiner(void)
     printf("Copy this address to the other device to send a message!\n");
 }
 
-static otError configure_network_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
+otError configure_network_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
 {
     configure_network();
 
     return OT_ERROR_NONE;
 }
 
-static otError configure_joiner_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
+otError configure_joiner_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
 {
     configure_joiner();
 
