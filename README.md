@@ -95,6 +95,8 @@ So the messages here can only really be seen in the mesh, if they're ever receiv
 
 **TLDR: HomeNet is a special type of network called a mesh network, with secure messaging using UDP, often used for stuff like online games.**
 
+**Before you continue any further, please not only consider contributing to this project, but also [Hack Club](https://hackclub.com/), who supported me throughout development and kept me motivated to continue this project. Their funding allowed me to purchase more hardware without the risk of this being a potential financial burden.**
+
 Look interesting? Let's go to [Prerequisites](#prerequisites).
 
 ### Built With
@@ -221,6 +223,7 @@ Project Link: [https://github.com/dj1ch/HomeNet](https://github.com/dj1ch/HomeNe
 <!-- ACKNOWLEDGEMENTS -->
 ## Acknowledgements
 
+* [Hack Club](https://hackclub.com/)
 * [Meshtastic](https://meshtastic.org/)
 * [Espressif](https://github.com/espressif/)
 * [Espressif OpenThread fork](https://github.com/espressif/openthread)
