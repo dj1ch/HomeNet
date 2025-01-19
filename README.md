@@ -20,7 +20,7 @@
     <a href="https://github.com/dj1ch/HomeNet"><strong>Explore the docs »</strong></a>
     <br />
     <br />
-    <a href="https://youtu.be/0GrTWAWUdIw">View Demo</a>
+    <a href="https://youtu.be/-zFOi41-QDw">View Demo</a>
     ·
     <a href="https://github.com/dj1ch/HomeNet/issues">Report Bug</a>
     ·
