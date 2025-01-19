@@ -89,6 +89,11 @@ esp_err_t turn_off_led(void)
  */
 otError turn_on_led_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
 {
+    if (aArgsLength != 0)
+    {
+        printf("Usage: turn_on_led\n");
+        return OT_ERROR_INVALID_ARGS;
+    }
     esp_err_t err = turn_on_led();
     if (err == ESP_OK)
     {
@@ -102,6 +107,11 @@ otError turn_on_led_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
  */
 otError turn_off_led_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
 {
+    if (aArgsLength != 0)
+    {
+        printf("Usage: turn_off_led\n");
+        return OT_ERROR_INVALID_ARGS;
+    }
     esp_err_t err = turn_off_led();
     if (err == ESP_OK)
     {

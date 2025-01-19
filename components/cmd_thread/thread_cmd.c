@@ -339,6 +339,11 @@ void configure_joiner(void)
 
 otError configure_network_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
 {
+    if (aArgsLength != 0)
+    {
+        printf("Usage: configure_network\n");
+        return OT_ERROR_INVALID_ARGS;
+    }
     configure_network();
 
     return OT_ERROR_NONE;
@@ -346,6 +351,11 @@ otError configure_network_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]
 
 otError configure_joiner_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
 {
+    if (aArgsLength != 0)
+    {
+        printf("Usage: configure_joiner\n");
+        return OT_ERROR_INVALID_ARGS;
+    }
     configure_joiner();
 
     return OT_ERROR_NONE;
@@ -422,8 +432,8 @@ void register_thread(void)
         {"configure_joiner", configure_joiner_cmd},
         {"turn_on_led", turn_on_led_cmd},
         {"turn_off_led", turn_off_led_cmd},
-        {"get_nvs_entries", get_nvs_entries_cmd},
-        {"clear_nvs_entries", clear_nvs_entries_cmd},
+        {"get_lfs_entries", get_lfs_entries_cmd},
+        {"clear_lfs_entries", clear_lfs_entries_cmd},
     };
     otCliSetUserCommands(kCommands, OT_ARRAY_LENGTH(kCommands), aInstance);
 #endif

@@ -51,8 +51,8 @@
 esp_err_t set_nickname(const char *peerAddr, const char *nickname);
 esp_err_t get_nickname(const char *peerAddr, char *nickname, size_t len);
 esp_err_t get_ipv6(const char *nickname, char *peerAddr, size_t len);
-esp_err_t get_nvs_entries();
-esp_err_t clear_nvs_entries();
+esp_err_t get_lfs_entries();
+esp_err_t clear_lfs_entries();
 
 /**
  * Hash function to generate a shorter key
@@ -117,15 +117,16 @@ esp_err_t get_nickname(const char *peerAddr, char *nickname, size_t len)
     while ((entry = readdir(d)) != NULL)
     {
         char path[MAX_PATH_LENGTH];
-        snprintf(path, sizeof(path), "/littlefs" "%s", entry->d_name);
+        snprintf(path, sizeof(path), "%s/%s", "/littlefs", entry->d_name);
 
         FILE *f = fopen(path, "r");
         if (f == NULL)
         {
+            printf("Failed to open file for reading: %s\n", path);
             continue;
         }
 
-        char storedPeerAddr[64];
+        char storedPeerAddr[MAX_PATH_LENGTH];
         fgets(storedPeerAddr, sizeof(storedPeerAddr), f);
         fclose(f);
 
@@ -152,7 +153,7 @@ esp_err_t get_ipv6(const char *nickname, char *peerAddr, size_t len)
     }
 
     char path[MAX_PATH_LENGTH];
-    snprintf(path, sizeof(path), "/littlefs" "/%s", nickname);
+    snprintf(path, sizeof(path), "/littlefs/%s", nickname);
 
     FILE *f = fopen(path, "r");
     if (f == NULL)
@@ -164,14 +165,13 @@ esp_err_t get_ipv6(const char *nickname, char *peerAddr, size_t len)
     fgets(peerAddr, len, f);
     fclose(f);
 
-    printf("Found IPv6 address '%s' for nickname '%s'\n", peerAddr, nickname);
     return ESP_OK;
 }
 
 /**
  * List all NVS key-value entries
  */
-esp_err_t get_nvs_entries()
+esp_err_t get_lfs_entries()
 {
     DIR *d = opendir("/littlefs");
     if (d == NULL)
@@ -203,7 +203,7 @@ esp_err_t get_nvs_entries()
     return ESP_OK;
 }
 
-esp_err_t clear_nvs_entries()
+esp_err_t clear_lfs_entries()
 {
     DIR *d = opendir("/littlefs");
     if (d == NULL)
@@ -317,9 +317,14 @@ otError get_ipv6_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
     }
 }
 
-otError get_nvs_entries_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
+otError get_lfs_entries_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
 {
-    esp_err_t err = get_nvs_entries();
+    if (aArgsLength != 0)
+    {
+        printf("Usage: get_lfs_entries\n");
+        return OT_ERROR_FAILED;
+    }
+    esp_err_t err = get_lfs_entries();
     if (err != ESP_OK)
     {
         printf("Failed to get NVS entries\n");
@@ -328,9 +333,14 @@ otError get_nvs_entries_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
     return OT_ERROR_NONE;
 }
 
-otError clear_nvs_entries_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
+otError clear_lfs_entries_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
 {
-    esp_err_t err = clear_nvs_entries();
+    if (aArgsLength != 0)
+    {
+        printf("Usage: clear_lfs_entries\n");
+        return OT_ERROR_FAILED;
+    }
+    esp_err_t err = clear_lfs_entries();
     if (err != ESP_OK)
     {
         printf("Failed to clear NVS entries\n");
