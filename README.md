@@ -109,6 +109,14 @@ To get a local copy up and running follow these simple steps.
 
 ### Prerequisites
 
+### Supported Hardware
+
+* `ESP32C6-*`
+* `ESP32C5-*`
+* `ESP32H2-*`
+
+I highly recommend getting an [M5NanoC6](https://shop.m5stack.com/products/m5stack-nanoc6-dev-kit), [ESP32H2-*](https://www.amazon.com/Espressif-ESP32-H2-DevKitM-1-N4-Development-Board/dp/B0BWM83LMF), or ESP32C5-* (whenever that comes out) as these are devices not only supported by `esp-idf` but also `Openthread`. You can probably find them cheaper elsewhere but usually I go with well known sellers as they are often much more trustworthy than a random website and/or person.
+
 ### Installation
 
 1. Clone the repo
@@ -162,8 +170,10 @@ Here are the commands that you can use:
 * `configure_joiner` Configures **any** device as a joiner, meaning that it joins the mesh created by the device that ran the `configure_network` command
 * `turn_on_led` Turns on the onboard LED (must be configured)
 * `turn_off_led` Turns off the onboard LED (must be configured)
-* `get_nvs_entries` Lists all NVS entries
-* `clear_nvs_entries` Clears NVS entries (if any)
+* `get_lfs_entries` Lists all NVS entries
+* `clear_lfs_entries` Clears NVS entries (if any)
+
+You can simply run the command without any arguments e.g `set_nickname` to see if any are needed. With an exception for the LED commands and some LFS commands there will most likely be an argument required for it to run.
 
 <!-- ROADMAP -->
 ## Roadmap
@@ -173,13 +183,13 @@ As of now I would like to implement/am in the progress of implementing:
 * [x] Create basic messaging w/ commands
 * [x] Create custom method for anyone to advertise their presence to other instances of HomeNet
 * [x] Allow the saving of clients like phone contacts
-* [ ] Allow direct communication with these saved clients like DMs
+* [x] Allow direct communication with these saved clients like DMs
 * [x] Establish a method to ensure the security of the connection
 * [ ] Rewrite UDP communication using custom receivers, transmitters, etc
   * [x] Custom transmitter
   * [ ] Custom receiver
-* [ ] Make documentation simpler for other audiences (may need to reach out)
-* [ ] (Maybe) Make an application that communicates with the ESP over BLE to send messages
+* [x] Make documentation simpler for other audiences (may need to reach out)
+* [ ] (Maybe) Make an application that communicates with the ESP over BLE to send messages e.g [Meshtastic App(s)](https://meshtastic.org/docs/software/)
 
 See the [open issues](https://github.com/dj1ch/HomeNet/issues) for a list of proposed features (and known issues).
 
@@ -202,13 +212,16 @@ Distributed under the MIT License. See `LICENSE` for more information.
 <!-- CONTACT -->
 ## Contact
 
-dj1ch - tg.1ch0712@gmail.com
+dj1ch - [tg.1ch0712@gmail.com](tg.1ch0712@gmail.com)
+
+Personal Website - [dj1ch.pages.dev/contact](https://dj1ch.pages.dev/contact)
 
 Project Link: [https://github.com/dj1ch/HomeNet](https://github.com/dj1ch/HomeNet)
 
 <!-- ACKNOWLEDGEMENTS -->
 ## Acknowledgements
 
+* [Meshtastic](https://meshtastic.org/)
 * [Espressif](https://github.com/espressif/)
 * [Espressif OpenThread fork](https://github.com/espressif/openthread)
 * [ESP32 IEEE 802.15.4 Example](https://github.com/espressif/esp-idf/blob/master/examples/ieee802154/ieee802154_cli/main/esp_ieee802154_cli.c)

@@ -53,7 +53,7 @@
 char* get_ipv6_str(char *nickname, size_t len)
 {
     // backup string
-    char* failed = "failed";
+    char* failed = NULL;
 
     // get the nickname
     char path[MAX_PATH_LENGTH];
@@ -213,48 +213,42 @@ otError send_message_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
 {
     otInstance *aInstance = esp_openthread_get_instance();
 
-    // check if the correct number of arguments is passed
+    // Check if the correct number of arguments is passed
     if (aArgsLength < 2)
     {
         printf("Usage: send_message <message> <ipv6_addr>\n");
         return OT_ERROR_INVALID_ARGS;
     }
 
-    // conversions
+    // Conversions
     otIp6Address destAddr;
     esp_err_t err;
-    otError error;
 
-    // check LittleFS for nickname if one is provided
-    char *peerAddr;
-    size_t len = 64;
-    peerAddr = get_ipv6_str(aArgs[aArgsLength - 1], len);
-    if (strcmp(peerAddr, "failed") != 0)
+    // Check LittleFS for nickname if one is provided
+    char *peerAddr = get_ipv6_str(aArgs[aArgsLength - 1], 64);
+    if (peerAddr != NULL)
     {
         printf("Found IPv6 address '%s' for nickname '%s'\n", peerAddr, aArgs[aArgsLength - 1]);
-        error = otIp6AddressFromString(peerAddr, &destAddr);
-        if (error != OT_ERROR_NONE)
+        err = otIp6AddressFromString(peerAddr, &destAddr);
+        if (err != OT_ERROR_NONE)
         {
             printf("Invalid IPv6 address: %s\n", peerAddr);
-            return error;
-        }
-        if (error == OT_ERROR_NONE)
-        {
-            otIp6AddressFromString(peerAddr, &destAddr);
+            free(peerAddr);
+            return err;
         }
     }
     else
     {
         printf("Nickname '%s' not found, switching to command line argument\n", aArgs[aArgsLength - 1]);
-        error = otIp6AddressFromString(aArgs[aArgsLength - 1], &destAddr);
-        if (error != OT_ERROR_NONE)
+        err = otIp6AddressFromString(aArgs[aArgsLength - 1], &destAddr);
+        if (err != OT_ERROR_NONE)
         {
             printf("Invalid IPv6 address: %s\n", aArgs[aArgsLength - 1]);
-            return error;
+            return err;
         }
     }
 
-    // create into one string
+    // Create the message string
     size_t messageLength = 0;
     for (uint8_t i = 0; i < aArgsLength - 1; i++)
     {
@@ -265,6 +259,7 @@ otError send_message_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
     if (message == NULL)
     {
         printf("Failed to allocate memory for message\n");
+        if (peerAddr != NULL) free(peerAddr);
         return OT_ERROR_NO_BUFS;
     }
 
@@ -278,43 +273,58 @@ otError send_message_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
         }
     }
 
-    // initialize the UDP socket
+    // Initialize the UDP socket
     otUdpSocket aSocket;
     otSockAddr aSockName = {0};
-    aSockName.mAddress = *otThreadGetMeshLocalEid(esp_openthread_get_instance());
     aSockName.mPort = UDP_PORT;
-    udp_create_socket(&aSocket, aInstance, &aSockName);
+    otError error = otUdpOpen(aInstance, &aSocket, NULL, NULL);
+    if (error != OT_ERROR_NONE)
+    {
+        printf("Failed to open UDP socket: %s\n", otThreadErrorToString(error));
+        free(message);
+        if (peerAddr != NULL) free(peerAddr);
+        return error;
+    }
 
-    // create the message
+    error = otUdpBind(aInstance, &aSocket, &aSockName, OT_NETIF_THREAD);
+    if (error != OT_ERROR_NONE)
+    {
+        printf("Failed to bind UDP socket: %s\n", otThreadErrorToString(error));
+        otUdpClose(aInstance, &aSocket);
+        free(message);
+        if (peerAddr != NULL) free(peerAddr);
+        return error;
+    }
+
+    // Create the message
     otMessage *aMessage = otUdpNewMessage(aInstance, NULL);
     if (aMessage == NULL)
     {
         printf("Failed to allocate message\n");
         otUdpClose(aInstance, &aSocket);
         free(message);
+        if (peerAddr != NULL) free(peerAddr);
         return OT_ERROR_NO_BUFS;
     }
 
-    // append the message
-    err = otMessageAppend(aMessage, message, strlen(message));
-    if (err != OT_ERROR_NONE)
+    // Append the message
+    error = otMessageAppend(aMessage, message, strlen(message));
+    if (error != OT_ERROR_NONE)
     {
-        printf("Failed to append message: %s\n", otThreadErrorToString(err));
+        printf("Failed to append message: %s\n", otThreadErrorToString(error));
         otMessageFree(aMessage);
         otUdpClose(aInstance, &aSocket);
         free(message);
-        return err;
+        if (peerAddr != NULL) free(peerAddr);
+        return error;
     }
 
-    // prepare the message info
+    // Prepare the message info
     otMessageInfo aMessageInfo = {0};
-    aMessageInfo.mSockAddr = aSockName.mAddress;
-    aMessageInfo.mSockPort = UDP_PORT;
-    aMessageInfo.mPeerPort = UDP_PORT;
     aMessageInfo.mPeerAddr = destAddr;
+    aMessageInfo.mPeerPort = UDP_PORT;
 
-    // send it
-    // send_udp(aInstance, UDP_PORT, UDP_PORT, &aSocket, aMessage, &aMessageInfo);
+    // Send it
     error = otUdpSend(aInstance, &aSocket, aMessage, &aMessageInfo);
     if (error != OT_ERROR_NONE)
     {
@@ -322,14 +332,16 @@ otError send_message_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
         otMessageFree(aMessage);
         otUdpClose(aInstance, &aSocket);
         free(message);
+        if (peerAddr != NULL) free(peerAddr);
         return error;
     }
 
-    // close the socket
+    // Close the socket
     otUdpClose(aInstance, &aSocket);
 
     printf("Sent message \"%s\" to destination %s\n", message, aArgs[aArgsLength - 1]);
     free(message);
+    if (peerAddr != NULL) free(peerAddr);
     return OT_ERROR_NONE;
 }
 
