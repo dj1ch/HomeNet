@@ -108,80 +108,10 @@ void ot_cli_input(const char *inputLine)
     free(cliLine);
 }
 
-void udp_create_socket(otUdpSocket *aSocket,
-                     otInstance *aInstance,
-                     otSockAddr *aSockName)
+void udp_create_socket(otUdpSocket *aSocket, otInstance *aInstance, otSockAddr *aSockName)
 {
     handle_error(otUdpOpen(aInstance, aSocket, NULL, NULL));
     handle_error(otUdpBind(aInstance, aSocket, aSockName, OT_NETIF_THREAD));
-    return;
-}
-
-void create_rx_socket(otInstance *aInstance,
-                          uint16_t port,
-                          otSockAddr *aSockName,
-                          otUdpSocket *aSocket)
-{
-    aSockName->mAddress = *otThreadGetMeshLocalEid(aInstance);
-    aSockName->mPort = port;
-
-    udp_create_socket(aSocket, aInstance, aSockName);
-    return;
-}
-
-inline uint16_t get_payload_length(const otMessage *aMessage) {
-    return otMessageGetLength(aMessage) - otMessageGetOffset(aMessage);
-}
-
-void udp_get_payload(const otMessage *aMessage, void* buffer) {
-    uint16_t offset = otMessageGetOffset(aMessage);
-    uint16_t length = get_payload_length(aMessage);
-
-    uint16_t bytesRead = otMessageRead(aMessage, offset, buffer, length);
-    assert(bytesRead == length);
-    return;
-}
-
-/**
- * UDP message recieving callback
- */
-bool udp_msg_rcv_cb(void *aContext, const otMessage *aMessage, const otMessageInfo *aMessageInfo)
-{
-    uint16_t senderPort = aMessageInfo->mPeerPort;
-    uint16_t receiverPort = aMessageInfo->mSockPort;
-
-    if ((senderPort == UDP_PORT) && (receiverPort == UDP_PORT)) {
-        char payload[MSG_SIZE];
-        char output[MSG_SIZE];
-
-        EmptyMemory(payload, MSG_SIZE);
-        EmptyMemory(output, MSG_SIZE);
-
-        udp_get_payload((const otMessage *) aMessage, payload);
-        printf("Received: %s", payload);
-
-        return true;
-    }
-
-  return false;
-}
-
-void udp_init_rx(otUdpReceiver *receiver) {
-    receiver->mContext = NULL;
-    receiver->mHandler = NULL;
-    receiver->mNext = NULL;
-    
-    return;
-}
-
-void udp_create_rx(otInstance *aInstance, otUdpReceiver *receiver, otSockAddr *aSockName, otUdpSocket *aSocket) {
-    receiver->mHandler = udp_msg_rcv_cb;
-    receiver->mContext = NULL;
-    receiver->mNext = NULL;
-    
-    handle_error(otUdpOpen(aInstance, aSocket, NULL, NULL));
-    handle_error(otUdpBind(aInstance, aSocket, aSockName, OT_NETIF_THREAD));
-    handle_error(otUdpAddReceiver(aInstance, receiver));
     return;
 }
 
