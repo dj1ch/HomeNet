@@ -172,8 +172,9 @@ Here are the commands that you can use:
 * `configure_joiner` Configures **any** device as a joiner, meaning that it joins the mesh created by the device that ran the `configure_network` command
 * `turn_on_led` Turns on the onboard LED (must be configured)
 * `turn_off_led` Turns off the onboard LED (must be configured)
-* `get_lfs_entries` Lists all NVS entries
-* `clear_lfs_entries` Clears NVS entries (if any)
+* `get_lfs_entries` Lists all LFS entries
+* `clear_lfs_entries` Clears LFS entries (if any)
+* `chat_logs` Checks chat logs, either all of them or those sent to a specific IPv6 address
 
 You can simply run the command without any arguments e.g `set_nickname` to see if any are needed. With an exception for the LED commands and some LFS commands there will most likely be an argument required for it to run.
 
@@ -187,6 +188,7 @@ As of now I would like to implement/am in the progress of implementing:
 * [x] Allow the saving of clients like phone contacts
 * [x] Allow direct communication with these saved clients like DMs
 * [x] Establish a method to ensure the security of the connection
+* [x] Chat logs
 * [ ] Rewrite UDP communication using custom receivers, transmitters, etc
   * [x] Custom transmitter
   * [ ] Custom receiver

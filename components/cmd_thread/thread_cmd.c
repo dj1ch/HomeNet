@@ -434,6 +434,7 @@ void register_thread(void)
         {"turn_off_led", turn_off_led_cmd},
         {"get_lfs_entries", get_lfs_entries_cmd},
         {"clear_lfs_entries", clear_lfs_entries_cmd},
+        {"chat_logs", chat_logs_cmd},
     };
     otCliSetUserCommands(kCommands, OT_ARRAY_LENGTH(kCommands), aInstance);
 #endif

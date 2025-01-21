@@ -32,6 +32,8 @@
 #include "esp_openthread_netif_glue.h"
 #include "esp_openthread_types.h"
 #include "esp_log.h"
+#include "esp_littlefs.h"
+#include <dirent.h>
 #include <stdio.h>
 
 #define MSG_SIZE 128
@@ -135,6 +137,85 @@ void send_commands(const char *commands[], int numCommands)
     {
         ot_cli_input(commands[i]);
     }
+}
+
+esp_err_t log_chat(char *peerAddr, char *message)
+{
+    char path[MAX_PATH_LENGTH];
+    snprintf(path, sizeof(path), "/littlefs/chat_logs.txt");
+
+    FILE *f = fopen(path, "a");
+    if (f == NULL)
+    {
+        printf("Failed to open file for writing\n");
+        return ESP_FAIL;
+    }
+
+    fprintf(f, "Message: \"%s\" Peer: \"%s\"\n", message, peerAddr);
+    fclose(f);
+    return ESP_OK;
+}
+
+esp_err_t chat_logs(char *peerAddr)
+{
+    char path[MAX_PATH_LENGTH];
+    snprintf(path, sizeof(path), "/littlefs/chat_logs.txt");
+
+    FILE *f = fopen(path, "r");
+    if (f == NULL)
+    {
+        printf("File not found, creating new file\n");
+        FILE *newFile = fopen(path, "w");
+        if (newFile == NULL)
+        {
+            printf("Failed to create new file\n");
+            return ESP_FAIL;
+        }
+        fclose(newFile);
+
+        f = fopen(path, "r");
+        if (f == NULL)
+        {
+            printf("Failed to open file for reading after creation\n");
+            return ESP_FAIL;
+        }
+    }
+
+    char line[256];
+    if (peerAddr != NULL)
+    {
+        // check for nickname
+        char *ipv6Addr = get_ipv6_str(peerAddr, 64);
+        if (ipv6Addr != NULL)
+        {
+            peerAddr = ipv6Addr;
+        }
+
+        // search for logs with addr
+        while (fgets(line, sizeof(line), f))
+        {
+            if (strstr(line, peerAddr) != NULL)
+            {
+                printf("%s", line);
+            }
+        }
+
+        if (ipv6Addr != NULL)
+        {
+            free(ipv6Addr);
+        }
+    }
+    else
+    {
+        // print all logs if no address is provided
+        while (fgets(line, sizeof(line), f))
+        {
+            printf("%s", line);
+        }
+    }
+
+    fclose(f);
+    return ESP_OK;
 }
 
 /**
@@ -246,8 +327,37 @@ otError send_message_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
     otUdpClose(aInstance, &aSocket);
 
     printf("Sent message \"%s\" to destination %s\n", message, aArgs[aArgsLength - 1]);
+    log_chat(peerAddr, message);
     free(message);
     if (peerAddr != NULL) free(peerAddr);
+    return OT_ERROR_NONE;
+}
+
+otError chat_logs_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[])
+{
+    if (aArgsLength > 1)
+    {
+        printf("Usage: chat_logs <optional_ipv6_address>\n");
+        return OT_ERROR_INVALID_ARGS;
+    }
+
+    if (aArgsLength == 1)
+    {
+        esp_err_t err = chat_logs(aArgs[0]);
+        if (err != ESP_OK)
+        {
+            printf("Failed to get chat logs for %s\n", aArgs[0]);
+            return OT_ERROR_FAILED;
+        }
+    } else {
+        esp_err_t err = chat_logs(NULL);
+        if (err != ESP_OK)
+        {
+            printf("Failed to get chat logs\n");
+            return OT_ERROR_FAILED;
+        }
+    }
+
     return OT_ERROR_NONE;
 }
 

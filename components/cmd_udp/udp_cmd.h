@@ -7,4 +7,5 @@
 #include "openthread/error.h"
 
 otError send_message_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]);
+otError chat_logs_cmd(void *aContext, uint8_t aArgsLength, char *aArgs[]);
 void register_udp();
