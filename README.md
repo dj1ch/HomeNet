@@ -48,9 +48,13 @@
 <!-- ABOUT THE PROJECT -->
 ## About The Project
 
+### So what is it?
+
 At the core, this is a simple mesh network created with the help of [OpenThread](https://openthread.io/), an open source version of the mesh networking system [Thread](threadgroup.org).
 
 Thread is a low-power, low latency mesh network technology designed for Internet of Things (IoT) devices. It enabled devices to communicate **directly** (keep in mind very important) or through multiple paths with each other, forming a resilient network with multiple methods to reach each node.
+
+### How the devices communicate
 
 Here is a somewhat simplified example of how it might look:
 
@@ -70,9 +74,13 @@ For example our network might reconfigure to look something like this:
 Device 1 <-> Device 2
 ```
 
+### Why a mesh network?
+
 We use this mesh network to ensure that a secure medium is established between devices for the sake of security, a core idea of this project.
 
 Meshes are naturally a lot more secure than regular networks. Their structures, like said before, have no sort of centralization, and can configure at will. There is a lot of redundancy, having the posssibility of multiple routers, commissioners, children, etc. Although this might seem inconvenient, it eliminates the reliance of one device, which could serve as a point of failure. This allows our network to prevail under **most** circumstances.
+
+### How is communication done?
 
 In this secure mesh, we allow our devices to communicate with one another directly over [IPv6](https://www.cisco.com/c/en/us/solutions/ipv6/overview.html), the latest, though probably not the most convenient networking protocol to use. Addresses tend to be lengthier which allows undecillions(billion billion billions) of devices to have unique devices, while [IPv4](https://bluecatnetworks.com/glossary/what-is-ipv4/)(the one that you're used to using) can only really hold up to a couple billions.
 
@@ -92,6 +100,30 @@ A UDP 'connection' may look like this:
 ```
 
 So the messages here can only really be seen in the mesh, if they're ever received. Lucky for us, devices in this mesh are programmed to handle the data received, as well as sending it.
+
+### What makes this decentralized?
+
+According to the *Merriam-Webster Dictionary*, *decentralized* means:
+
+```md
+
+1: the dispersion or distribution of functions and powers
+> a decentralization of powers
+
+specifically, government: the delegation of power from a central authority to regional and local authorities
+> the decentralization of the state's public school system
+> government decentralization
+
+2 sociology: the redistribution of population and industry from urban centers to outlying areas
+
+```
+
+In this context, *decentralized* implies that there is nobody controlling this mesh network but **you**. You have total control over this network, and what you do with it is not logged by me or anyone else. The code for [OpenThread](https://openthread.io/) is open source, and so is this project. You are free to modify it accordingly.
+
+Along with that, this network doesn't rely off of anything like WiFi or Cellular Data which may be controlled by external companies.
+
+These mesh networks in question are also created independantly of one another. If you would like to modify your mesh's settings with [ot-cli](https://openthread.io/reference/cli), you are free to do so as it could make your mesh more independent.
+
 
 **TLDR: HomeNet is a special type of network called a mesh network, with secure messaging using UDP, often used for stuff like online games.**
 
